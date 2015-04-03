@@ -1,5 +1,7 @@
 # The Ethereum EVM JIT
 
+[![Join the chat at https://gitter.im/ethereum/evmjit](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/ethereum/evmjit?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 EVM JIT is a library for just-in-time compilation of Ethereum EVM code.
 It can be used to substitute classic interpreter-like EVM Virtual Machine in Ethereum client.
 
