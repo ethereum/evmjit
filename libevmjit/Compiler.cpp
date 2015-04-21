@@ -9,7 +9,6 @@
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IntrinsicInst.h>
-#include <llvm/IR/MDBuilder.h>
 #include "preprocessor/llvm_includes_end.h"
 
 #include "Instruction.h"
@@ -133,6 +132,17 @@ std::unique_ptr<llvm::Module> Compiler::compile(code_iterator _begin, code_itera
 	auto entryBlock = llvm::BasicBlock::Create(m_builder.getContext(), {}, m_mainFunc);
 	m_builder.SetInsertPoint(entryBlock);
 
+	createBasicBlocks(_begin, _end);
+
+	// Init runtime structures.
+	RuntimeManager runtimeManager(m_builder, _begin, _end);
+	GasMeter gasMeter(m_builder, runtimeManager);
+	Memory memory(runtimeManager, gasMeter);
+	Ext ext(runtimeManager, memory);
+	Stack stack(m_builder, runtimeManager);
+	runtimeManager.setStack(stack); // Runtime Manager will free stack memory
+	Arith256 arith(m_builder);
+
 	auto jmpBufWords = m_builder.CreateAlloca(Type::BytePtr, m_builder.getInt64(3), "jmpBuf.words");
 	auto frameaddress = llvm::Intrinsic::getDeclaration(module.get(), llvm::Intrinsic::frameaddress);
 	auto fp = m_builder.CreateCall(frameaddress, m_builder.getInt32(0), "fp");
@@ -145,25 +155,14 @@ std::unique_ptr<llvm::Module> Compiler::compile(code_iterator _begin, code_itera
 	auto jmpBuf = m_builder.CreateBitCast(jmpBufWords, Type::BytePtr, "jmpBuf");
 	auto r = m_builder.CreateCall(setjmp, jmpBuf);
 	auto normalFlow = m_builder.CreateICmpEQ(r, m_builder.getInt32(0));
-
-	createBasicBlocks(_begin, _end);
-
-	// Init runtime structures.
-	RuntimeManager runtimeManager(m_builder, jmpBuf, _begin, _end);
-	GasMeter gasMeter(m_builder, runtimeManager);
-	Memory memory(runtimeManager, gasMeter);
-	Ext ext(runtimeManager, memory);
-	Stack stack(m_builder, runtimeManager);
-	runtimeManager.setStack(stack); // Runtime Manager will free stack memory
-	Arith256 arith(m_builder);
+	runtimeManager.setJmpBuf(jmpBuf);
 
 	// TODO: Create Stop basic block on demand
 	m_stopBB = llvm::BasicBlock::Create(m_mainFunc->getContext(), "Stop", m_mainFunc);
 	auto abortBB = llvm::BasicBlock::Create(m_mainFunc->getContext(), "Abort", m_mainFunc);
 
 	auto firstBB = m_basicBlocks.empty() ? m_stopBB : m_basicBlocks.begin()->second.llvm();
-	auto expectTrue = llvm::MDBuilder{m_builder.getContext()}.createBranchWeights(1, 0);
-	m_builder.CreateCondBr(normalFlow, firstBB, abortBB, expectTrue);
+	m_builder.CreateCondBr(normalFlow, firstBB, abortBB, Type::expectTrue);
 
 	for (auto basicBlockPairIt = m_basicBlocks.begin(); basicBlockPairIt != m_basicBlocks.end(); ++basicBlockPairIt)
 	{
@@ -503,7 +502,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			auto val = stack.pop();
 			static_cast<void>(val);
 			// Generate a dummy use of val to make sure that a get(0) will be emitted at this point,
-			// so that StackTooSmall will be thrown
+			// so that StackUnderflow will be thrown
 			// m_builder.CreateICmpEQ(val, val, "dummy");
 			break;
 		}
@@ -756,7 +755,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 		case Instruction::CALL:
 		case Instruction::CALLCODE:
 		{
-			auto callGas256 = stack.pop();
+			auto callGas = stack.pop();
 			auto codeAddress = stack.pop();
 			auto value = stack.pop();
 			auto inOff = stack.pop();
@@ -774,13 +773,8 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			if (inst == Instruction::CALLCODE)
 				receiveAddress = _runtimeManager.get(RuntimeData::Address);
 
-			auto gas = _runtimeManager.getGas();
-			_gasMeter.count(callGas256);
-			auto callGas = m_builder.CreateTrunc(callGas256, Type::Gas);
-			auto gasLeft = m_builder.CreateNSWSub(gas, callGas);
-			_runtimeManager.setGas(callGas);
-			auto ret = _ext.call(receiveAddress, value, inOff, inSize, outOff, outSize, codeAddress);
-			_gasMeter.giveBack(gasLeft);
+			auto ret = _ext.call(callGas, receiveAddress, value, inOff, inSize, outOff, outSize, codeAddress);
+			_gasMeter.count(m_builder.getInt64(0), _runtimeManager.getJmpBuf(), _runtimeManager.getGasPtr());
 			stack.push(ret);
 			break;
 		}
@@ -844,6 +838,9 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 	// Block may have no terminator if the next instruction is a jump destination.
 	if (!_basicBlock.llvm()->getTerminator())
 		m_builder.CreateBr(_nextBasicBlock);
+
+	m_builder.SetInsertPoint(_basicBlock.llvm()->getFirstNonPHI());
+	_runtimeManager.checkStackLimit(_basicBlock.localStack().getMaxSize(), _basicBlock.localStack().getDiff());
 }
 
 

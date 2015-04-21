@@ -3,6 +3,9 @@
 #include <array>
 #include <mutex>
 #include <iostream>
+#include <unordered_map>
+#include <cstdlib>
+#include <cstring>
 
 #include "preprocessor/llvm_includes_start.h"
 #include <llvm/IR/Module.h>
@@ -66,7 +69,15 @@ void printVersion()
 
 namespace cl = llvm::cl;
 cl::opt<bool> g_optimize{"O", cl::desc{"Optimize"}};
-cl::opt<bool> g_cache{"cache", cl::desc{"Cache compiled EVM code on disk"}, cl::init(true)};
+cl::opt<CacheMode> g_cache{"cache", cl::desc{"Cache compiled EVM code on disk"},
+	cl::values(
+		clEnumValN(CacheMode::on,    "1", "Enabled"),
+		clEnumValN(CacheMode::off,   "0", "Disabled"),
+		clEnumValN(CacheMode::read,  "r", "Read only. No new objects are added to cache."),
+		clEnumValN(CacheMode::write, "w", "Write only. No objects are loaded from cache."),
+		clEnumValN(CacheMode::clear, "c", "Clear the cache storage. Cache is disabled."),
+		clEnumValN(CacheMode::preload, "p", "Preload all cached objects."),
+		clEnumValEnd)};
 cl::opt<bool> g_stats{"st", cl::desc{"Statistics"}};
 cl::opt<bool> g_dump{"dump", cl::desc{"Dump LLVM IR module"}};
 
@@ -74,7 +85,20 @@ void parseOptions()
 {
 	static llvm::llvm_shutdown_obj shutdownObj{};
 	cl::AddExtraVersionPrinter(printVersion);
-	cl::ParseEnvironmentOptions("evmjit", "EVMJIT", "Ethereum EVM JIT Compiler");
+	//cl::ParseEnvironmentOptions("evmjit", "EVMJIT", "Ethereum EVM JIT Compiler");
+
+	// FIXME: LLVM workaround:
+	// Manually select instruction scheduler. Confirmed bad schedulers: source, list-burr, list-hybrid.
+	// "source" scheduler has a bug: http://llvm.org/bugs/show_bug.cgi?id=22304
+	auto envLine = std::getenv("EVMJIT");
+	auto commandLine = std::string{"evmjit "} + (envLine ? envLine : "") + " -pre-RA-sched=list-ilp\0";
+	static const auto c_maxArgs = 20;
+	char const* argv[c_maxArgs] = {nullptr, };
+	auto arg = std::strtok(&*commandLine.begin(), " ");
+	auto i = 0;
+	for (; i < c_maxArgs && arg; ++i, arg = std::strtok(nullptr, " "))
+		argv[i] = arg;
+	cl::ParseCommandLineOptions(i, argv, "Ethereum EVM JIT Compiler");
 }
 
 }
@@ -88,11 +112,21 @@ ReturnCode ExecutionEngine::run(RuntimeData* _data, Env* _env)
 	std::unique_ptr<ExecStats> listener{new ExecStats};
 	listener->stateChanged(ExecState::Started);
 
-	auto objectCache = g_cache ? Cache::getObjectCache(listener.get()) : nullptr;
+	bool preloadCache = g_cache == CacheMode::preload;
+	if (preloadCache)
+		g_cache = CacheMode::on;
+
+	// TODO: Do not pseudo-init the cache every time
+	auto objectCache = (g_cache != CacheMode::off && g_cache != CacheMode::clear) ? Cache::getObjectCache(g_cache, listener.get()) : nullptr;
+
+	static std::unordered_map<std::string, uint64_t> funcCache;
 
 	static std::unique_ptr<llvm::ExecutionEngine> ee;
 	if (!ee)
 	{
+		if (g_cache == CacheMode::clear)
+			Cache::clear();
+
 		llvm::InitializeNativeTarget();
 		llvm::InitializeNativeTargetAsmPrinter();
 
@@ -112,14 +146,21 @@ ReturnCode ExecutionEngine::run(RuntimeData* _data, Env* _env)
 			return ReturnCode::LLVMConfigError;
 		module.release();  // Successfully created llvm::ExecutionEngine takes ownership of the module
 		ee->setObjectCache(objectCache);
+
+		if (preloadCache)
+			Cache::preload(*ee, funcCache);
 	}
 
 	static StatsCollector statsCollector;
 
 	auto mainFuncName = codeHash(_data->codeHash);
-	Runtime runtime(_data, _env);	// TODO: I don't know why but it must be created before getFunctionAddress() calls
+	m_runtime.init(_data, _env);
 
-	auto entryFuncPtr = (EntryFuncPtr)ee->getFunctionAddress(mainFuncName);
+	EntryFuncPtr entryFuncPtr = nullptr;
+	auto it = funcCache.find(mainFuncName);
+	if (it != funcCache.end())
+		entryFuncPtr = (EntryFuncPtr) it->second;
+
 	if (!entryFuncPtr)
 	{
 		auto module = objectCache ? Cache::getObject(mainFuncName) : nullptr;
@@ -146,15 +187,16 @@ ReturnCode ExecutionEngine::run(RuntimeData* _data, Env* _env)
 	if (!CHECK(entryFuncPtr))
 		return ReturnCode::LLVMLinkError;
 
+	if (it == funcCache.end())
+		funcCache[mainFuncName] = (uint64_t) entryFuncPtr;
+
 	listener->stateChanged(ExecState::Execution);
-	auto returnCode = entryFuncPtr(&runtime);
+	auto returnCode = entryFuncPtr(&m_runtime);
 	listener->stateChanged(ExecState::Return);
 
 	if (returnCode == ReturnCode::Return)
-	{
-		returnData = runtime.getReturnData();     // Save reference to return data
-		std::swap(m_memory, runtime.getMemory()); // Take ownership of memory
-	}
+		returnData = m_runtime.getReturnData();     // Save reference to return data
+
 	listener->stateChanged(ExecState::Finished);
 
 	if (g_stats)
