@@ -2,7 +2,7 @@
 
 #include <memory>
 
-#include "RuntimeData.h"
+#include "Runtime.h"
 
 namespace dev
 {
@@ -51,9 +51,7 @@ public:
 	bytes_ref returnData;
 
 private:
-	/// After execution, if RETURN used, memory is moved there
-	/// to allow client copy the returned data
-	bytes m_memory;
+	Runtime m_runtime;
 };
 
 }
