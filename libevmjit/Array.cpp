@@ -19,7 +19,7 @@ namespace jit
 {
 
 static const auto c_reallocStep = 1;
-static const auto c_reallocMultipier = 2;
+//static const auto c_reallocMultipier = 2;
 
 llvm::Value* LazyFunction::call(llvm::IRBuilder<>& _builder, std::initializer_list<llvm::Value*> const& _args, llvm::Twine const& _name)
 {
