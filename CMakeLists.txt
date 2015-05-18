@@ -7,6 +7,8 @@ set(CMAKE_AUTOMOC OFF)
 
 if(${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
 	set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -Wextra -Wconversion -Wno-sign-conversion -Wno-unknown-pragmas")
+elseif((${CMAKE_CXX_COMPILER_ID} MATCHES "Clang") AND (${CMAKE_SYSTEM_NAME} MATCHES "Linux"))
+	set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -Wno-unknown-pragmas -Wextra -Wno-unused-parameter -stdlib=libstdc++ -fcolor-diagnostics -Qunused-arguments")
 endif()
 
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
