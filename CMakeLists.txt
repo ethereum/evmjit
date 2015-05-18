@@ -5,8 +5,7 @@ project(evmjit)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_AUTOMOC OFF)
 
-if(${CMAKE_CXX_COMPILER_ID} STREQUAL "MSVC")
-else()
+if(${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
 	set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -Wextra -Wconversion -Wno-sign-conversion -Wno-unknown-pragmas")
 endif()
 
