@@ -61,22 +61,17 @@ llvm::Value* LocalStack::pop()
 	return item;
 }
 
-/**
- *  Pushes a copy of _index-th element (tos is 0-th elem).
- */
+/// Copies the _index-th element of the local stack and pushes it back on the top.
 void LocalStack::dup(size_t _index)
 {
 	auto val = get(_index);
 	push(val);
 }
 
-/**
- *  Swaps tos with _index-th element (tos is 0-th elem).
- *  _index must be > 0.
- */
+/// Swaps the top element with the _index-th element of the local stack.
 void LocalStack::swap(size_t _index)
 {
-	assert(_index > 0);
+	assert(_index > 0); ///< _index must not be 0.
 	auto val = get(_index);
 	auto tos = get(0);
 	set(_index, tos);
