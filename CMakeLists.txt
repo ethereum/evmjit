@@ -5,6 +5,8 @@ cmake_policy(SET CMP0048 NEW) 	# allow VERSION argument in project()
 
 project(EVMJIT VERSION 0.9.0.1 LANGUAGES CXX)
 
+message(STATUS "EVM JIT ${EVMJIT_VERSION_MAJOR}.${EVMJIT_VERSION_MINOR}.${EVMJIT_VERSION_PATCH}")
+
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_AUTOMOC OFF)
 
@@ -24,8 +26,7 @@ find_package(LLVM REQUIRED CONFIG)
 if (${LLVM_VERSION} VERSION_LESS 3.7)
 	message(FATAL_ERROR "Incompatible LLVM version ${LLVM_VERSION}")
 endif()
-message(STATUS "Found LLVM ${LLVM_VERSION}")
-message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+message(STATUS "Using LLVM ${LLVM_VERSION} (${LLVM_DIR})")
 llvm_map_components_to_libnames(LLVM_LIBS core support mcjit x86asmparser x86codegen ipo)
 
 add_subdirectory(libevmjit)
