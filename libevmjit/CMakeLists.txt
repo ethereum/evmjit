@@ -44,8 +44,6 @@ endif()
 string(COMPARE EQUAL "${LLVM_ENABLE_ASSERTIONS}" "ON" LLVM_DEBUG)
 configure_file(BuildInfo.h.in ${CMAKE_CURRENT_BINARY_DIR}/gen/BuildInfo.gen.h)
 
-message(STATUS "EVM JIT version: ${EVMJIT_VERSION_MAJOR}.${EVMJIT_VERSION_MINOR}.${EVMJIT_VERSION_PATCH}")
-
 add_library(${TARGET_NAME} SHARED ${SOURCES} gen/BuildInfo.gen.h)
 set_target_properties(${TARGET_NAME} PROPERTIES
 						VERSION ${EVMJIT_VERSION} SOVERSION ${EVMJIT_SOVERSION}
