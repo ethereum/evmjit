@@ -20,7 +20,7 @@ It can be used to substitute classic interpreter-like EVM Virtual Machine in Eth
 ### OSX
 
 1. Install llvm37
-  1. `brew install homebrew/versions/llvm37 --disable-shared --HEAD`
+  1. `brew install homebrew/versions/llvm37 --disable-shared`
 2. Build library with cmake
   1. `mkdir build && cd $_`
   2. `cmake -DLLVM_DIR=/usr/local/lib/llvm-3.7/share/llvm/cmake .. && make`
