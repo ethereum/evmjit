@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.0.0)
 cmake_policy(SET CMP0042 OLD) 	# fix MACOSX_RPATH
 cmake_policy(SET CMP0048 NEW) 	# allow VERSION argument in project()
 
-project(EVMJIT VERSION 0.9.0.1 LANGUAGES CXX)
+project(EVMJIT VERSION 0.9.0.2 LANGUAGES CXX)
 
 message(STATUS "EVM JIT ${EVMJIT_VERSION_MAJOR}.${EVMJIT_VERSION_MINOR}.${EVMJIT_VERSION_PATCH}")
 
@@ -22,6 +22,12 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux" AND NOT SANITIZE)
 endif()
 
 # LLVM
+if (DEFINED MSVC)
+	set(LLVM_DIR "${ETH_CMAKE_DIR}/extdep/install/windows/x64/share/llvm/cmake")
+elseif (DEFINED APPLE)
+	set(LLVM_DIR "/usr/local/opt/llvm37/lib/llvm-3.7/share/llvm/cmake")
+endif()
+
 find_package(LLVM REQUIRED CONFIG)
 if (${LLVM_VERSION} VERSION_LESS 3.7)
 	message(FATAL_ERROR "Incompatible LLVM version ${LLVM_VERSION}")
@@ -30,3 +36,8 @@ message(STATUS "Using LLVM ${LLVM_VERSION} (${LLVM_DIR})")
 llvm_map_components_to_libnames(LLVM_LIBS core support mcjit x86asmparser x86codegen ipo)
 
 add_subdirectory(libevmjit)
+
+if (DEFINED MSVC)
+	set(EVMJIT_DLLS_LOCAL $<TARGET_FILE:evmjit>)
+	set(EVMJIT_DLLS optimized ${EVMJIT_DLLS_LOCAL} debug ${EVMJIT_DLLS_LOCAL} PARENT_SCOPE)
+endif()
