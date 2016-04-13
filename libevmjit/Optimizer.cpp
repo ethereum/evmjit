@@ -39,7 +39,8 @@ char LongJmpEliminationPass::ID = 0;
 
 bool LongJmpEliminationPass::runOnFunction(llvm::Function& _func)
 {
-	if (&_func != _func.getParent()->begin())
+	auto iter = _func.getParent()->begin();
+	if (&_func != &(*iter))
 		return false;
 
 	auto& mainFunc = _func;
@@ -57,7 +58,8 @@ bool LongJmpEliminationPass::runOnFunction(llvm::Function& _func)
 		{
 			auto longjmp = term->getPrevNode();
 			assert(llvm::isa<llvm::CallInst>(longjmp));
-			retPhi->addIncoming(abortCode, bbIt);
+			auto bbPtr = &(*bbIt);
+			retPhi->addIncoming(abortCode, bbPtr);
 			llvm::ReplaceInstWithInst(term, llvm::BranchInst::Create(&exitBB));
 			longjmp->eraseFromParent();
 			modified = true;
