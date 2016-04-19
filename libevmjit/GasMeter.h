@@ -5,16 +5,21 @@
 
 namespace dev
 {
+namespace evmjit
+{
+struct JITSchedule;
+}
 namespace eth
 {
 namespace jit
 {
 class RuntimeManager;
+using namespace evmjit;
 
 class GasMeter : public CompilerHelper // TODO: Use RuntimeHelper
 {
 public:
-	GasMeter(llvm::IRBuilder<>& _builder, RuntimeManager& _runtimeManager);
+	GasMeter(IRBuilder& _builder, RuntimeManager& _runtimeManager, JITSchedule const& _schedule);
 
 	/// Count step cost of instruction
 	void count(Instruction _inst);
@@ -47,6 +52,8 @@ public:
 	void countCopy(llvm::Value* _copyWords);
 
 private:
+	int64_t getStepCost(Instruction inst) const;
+
 	/// Cumulative gas cost of a block of instructions
 	/// @TODO Handle overflow
 	int64_t m_blockCost = 0;
@@ -55,6 +62,7 @@ private:
 	llvm::Function* m_gasCheckFunc = nullptr;
 
 	RuntimeManager& m_runtimeManager;
+	JITSchedule const& m_schedule;
 };
 
 }

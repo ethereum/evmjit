@@ -13,11 +13,13 @@ namespace jit
 {
 class RuntimeManager;
 
+using IRBuilder = llvm::IRBuilder<>;
+
 /// Base class for compiler helpers like Memory, GasMeter, etc.
 class CompilerHelper
 {
 protected:
-	CompilerHelper(llvm::IRBuilder<>& _builder);
+	CompilerHelper(IRBuilder& _builder);
 
 	CompilerHelper(const CompilerHelper&) = delete;
 	CompilerHelper& operator=(CompilerHelper) = delete;
@@ -29,14 +31,10 @@ protected:
 	llvm::Function* getMainFunction();
 
 	/// Reference to parent compiler IR builder
-	llvm::IRBuilder<>& m_builder;
-	llvm::IRBuilder<>& getBuilder() { return m_builder; }
-
-	llvm::CallInst* createCall(llvm::Function* _func, std::initializer_list<llvm::Value*> const& _args);
+	IRBuilder& m_builder;
 
 	friend class RuntimeHelper;
 };
-
 
 /// Compiler helper that depends on runtime data
 class RuntimeHelper : public CompilerHelper
@@ -50,28 +48,14 @@ private:
 	RuntimeManager& m_runtimeManager;
 };
 
-
-/// Saves the insert point of the IR builder and restores it when destructed
 struct InsertPointGuard
 {
-	InsertPointGuard(llvm::IRBuilder<>& _builder) :
-		m_builder(_builder),
-		m_insertBB(m_builder.GetInsertBlock()),
-		m_insertPt(m_builder.GetInsertPoint())
-	{}
-
-	InsertPointGuard(const InsertPointGuard&) = delete;
-	void operator=(InsertPointGuard) = delete;
-
-	~InsertPointGuard()
-	{
-		m_builder.SetInsertPoint(m_insertBB, m_insertPt);
-	}
+	explicit InsertPointGuard(llvm::IRBuilderBase& _builder): m_builder(_builder), m_insertPoint(_builder.saveIP()) {}
+	~InsertPointGuard() { m_builder.restoreIP(m_insertPoint); }
 
 private:
-	llvm::IRBuilder<>& m_builder;
-	llvm::BasicBlock* m_insertBB;
-	llvm::BasicBlock::iterator m_insertPt;
+	llvm::IRBuilderBase& m_builder;
+	llvm::IRBuilderBase::InsertPoint m_insertPoint;
 };
 
 }
