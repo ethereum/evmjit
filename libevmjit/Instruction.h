@@ -9,9 +9,7 @@ namespace llvm
 
 namespace dev
 {
-namespace eth
-{
-namespace jit
+namespace evmjit
 {
 
 /// Virtual machine bytecode instruction.
@@ -155,6 +153,7 @@ enum class Instruction: uint8_t
 	CALL,				///< message-call into an account
 	CALLCODE,			///< message-call with another account's code only
 	RETURN,				///< halt execution returning output data
+	DELEGATECALL,		///< like CALLCODE but keeps caller's value and sender (only from homestead on)
 	SUICIDE = 0xff		///< halt execution and register account for later deletion
 };
 
@@ -234,6 +233,5 @@ void skipPushData(code_iterator& _curr, code_iterator _end);
 	case Instruction::SWAP15: \
 	case Instruction::SWAP16
 
-}
 }
 }

@@ -4,12 +4,15 @@
 
 #include "preprocessor/llvm_includes_start.h"
 #include <llvm/IR/CFG.h>
+#include <llvm/IR/Module.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/Support/raw_os_ostream.h>
 #include "preprocessor/llvm_includes_end.h"
 
+#include "RuntimeManager.h"
 #include "Type.h"
 #include "Utils.h"
 
@@ -20,372 +23,183 @@ namespace eth
 namespace jit
 {
 
-static const char* jumpDestName = "JmpDst.";
-static const char* basicBlockName = "Instr.";
-
-BasicBlock::BasicBlock(instr_idx _firstInstrIdx, code_iterator _begin, code_iterator _end, llvm::Function* _mainFunc, llvm::IRBuilder<>& _builder, bool isJumpDest) :
+BasicBlock::BasicBlock(instr_idx _firstInstrIdx, code_iterator _begin, code_iterator _end, llvm::Function* _mainFunc):
 	m_firstInstrIdx{_firstInstrIdx},
 	m_begin(_begin),
 	m_end(_end),
-	m_llvmBB(llvm::BasicBlock::Create(_mainFunc->getContext(), {isJumpDest ? jumpDestName : basicBlockName, std::to_string(_firstInstrIdx)}, _mainFunc)),
-	m_stack(*this),
-	m_builder(_builder),
-	m_isJumpDest(isJumpDest)
+	m_llvmBB(llvm::BasicBlock::Create(_mainFunc->getContext(), {".", std::to_string(_firstInstrIdx)}, _mainFunc))
 {}
 
-BasicBlock::BasicBlock(std::string _name, llvm::Function* _mainFunc, llvm::IRBuilder<>& _builder, bool isJumpDest) :
-	m_llvmBB(llvm::BasicBlock::Create(_mainFunc->getContext(), _name, _mainFunc)),
-	m_stack(*this),
-	m_builder(_builder),
-	m_isJumpDest(isJumpDest)
-{}
+LocalStack::LocalStack(IRBuilder& _builder, RuntimeManager& _runtimeManager):
+	CompilerHelper(_builder)
+{
+	// Call stack.prepare. min, max, size args will be filled up in finalize().
+	auto undef = llvm::UndefValue::get(Type::Size);
+	m_sp = m_builder.CreateCall(getStackPrepareFunc(),
+			{_runtimeManager.getStackBase(), _runtimeManager.getStackSize(), undef, undef, undef, _runtimeManager.getJmpBuf()},
+			{"sp", m_builder.GetInsertBlock()->getName()});
+}
 
-BasicBlock::LocalStack::LocalStack(BasicBlock& _owner) :
-	m_bblock(_owner)
-{}
-
-void BasicBlock::LocalStack::push(llvm::Value* _value)
+void LocalStack::push(llvm::Value* _value)
 {
 	assert(_value->getType() == Type::Word);
-	m_bblock.m_currentStack.push_back(_value);
-	m_bblock.m_tosOffset += 1;
-	m_maxSize = std::max(m_maxSize, m_bblock.m_currentStack.size());
+	m_local.push_back(_value);
+	m_maxSize = std::max(m_maxSize, size());
 }
 
-llvm::Value* BasicBlock::LocalStack::pop()
+llvm::Value* LocalStack::pop()
 {
-	auto result = get(0);
+	auto item = get(0);
+	assert(!m_local.empty() || !m_input.empty());
 
-	if (m_bblock.m_currentStack.size() > 0)
-		m_bblock.m_currentStack.pop_back();
+	if (m_local.size() > 0)
+		m_local.pop_back();
+	else
+		++m_globalPops;
 
-	m_bblock.m_tosOffset -= 1;
-	return result;
+	m_minSize = std::min(m_minSize, size());
+	return item;
 }
 
-/**
- *  Pushes a copy of _index-th element (tos is 0-th elem).
- */
-void BasicBlock::LocalStack::dup(size_t _index)
+/// Copies the _index-th element of the local stack and pushes it back on the top.
+void LocalStack::dup(size_t _index)
 {
 	auto val = get(_index);
 	push(val);
 }
 
-/**
- *  Swaps tos with _index-th element (tos is 0-th elem).
- *  _index must be > 0.
- */
-void BasicBlock::LocalStack::swap(size_t _index)
+/// Swaps the top element with the _index-th element of the local stack.
+void LocalStack::swap(size_t _index)
 {
-	assert(_index > 0);
+	assert(_index > 0); ///< _index must not be 0.
 	auto val = get(_index);
 	auto tos = get(0);
 	set(_index, tos);
 	set(0, val);
 }
 
-std::vector<llvm::Value*>::iterator BasicBlock::LocalStack::getItemIterator(size_t _index)
+llvm::Value* LocalStack::get(size_t _index)
 {
-	auto& currentStack = m_bblock.m_currentStack;
-	if (_index < currentStack.size())
-		return currentStack.end() - _index - 1;
+	if (_index < m_local.size())
+		return *(m_local.rbegin() + _index); // count from back
 
-	// Need to map more elements from the EVM stack
-	auto nNewItems = 1 + _index - currentStack.size();
-	currentStack.insert(currentStack.begin(), nNewItems, nullptr);
+	auto idx = _index - m_local.size() + m_globalPops;
+	if (idx >= m_input.size())
+		m_input.resize(idx + 1);
+	auto& item = m_input[idx];
 
-	return currentStack.end() - _index - 1;
-}
-
-llvm::Value* BasicBlock::LocalStack::get(size_t _index)
-{
-	auto& initialStack = m_bblock.m_initialStack;
-	auto itemIter = getItemIterator(_index);
-
-	if (*itemIter == nullptr)
+	if (!item)
 	{
-		// Need to fetch a new item from the EVM stack
-		assert(static_cast<int>(_index) >= m_bblock.m_tosOffset);
-		size_t initialIdx = _index - m_bblock.m_tosOffset;
-		if (initialIdx >= initialStack.size())
-		{
-			auto nNewItems = 1 + initialIdx - initialStack.size();
-			initialStack.insert(initialStack.end(), nNewItems, nullptr);
-		}
-
-		assert(initialStack[initialIdx] == nullptr);
-		// Create a dummy value.
-		std::string name = "get_" + std::to_string(_index);
-		initialStack[initialIdx] = m_bblock.m_builder.CreatePHI(Type::Word, 0, std::move(name));
-		*itemIter = initialStack[initialIdx];
+		// Fetch an item from global stack
+		ssize_t globalIdx = -static_cast<ssize_t>(idx) - 1;
+		auto slot = m_builder.CreateConstGEP1_64(m_sp, globalIdx);
+		item = m_builder.CreateAlignedLoad(slot, 16); // TODO: Handle malloc alignment. Also for 32-bit systems.
+		m_minSize = std::min(m_minSize, globalIdx); 	// remember required stack size
 	}
 
-	return *itemIter;
+	return item;
 }
 
-void BasicBlock::LocalStack::set(size_t _index, llvm::Value* _word)
+void LocalStack::set(size_t _index, llvm::Value* _word)
 {
-	auto itemIter = getItemIterator(_index);
-	*itemIter = _word;
+	if (_index < m_local.size())
+	{
+		*(m_local.rbegin() + _index) = _word;
+		return;
+	}
+
+	auto idx = _index - m_local.size() + m_globalPops;
+	assert(idx < m_input.size());
+	m_input[idx] = _word;
 }
 
 
-
-
-
-void BasicBlock::synchronizeLocalStack(Stack& _evmStack)
+void LocalStack::finalize()
 {
-	auto blockTerminator = m_llvmBB->getTerminator();
-	assert(blockTerminator != nullptr);
-	if (blockTerminator->getOpcode() != llvm::Instruction::Ret)
+	m_sp->setArgOperand(2, m_builder.getInt64(minSize()));
+	m_sp->setArgOperand(3, m_builder.getInt64(maxSize()));
+	m_sp->setArgOperand(4, m_builder.getInt64(size()));
+
+	if (auto term = m_builder.GetInsertBlock()->getTerminator())
+		m_builder.SetInsertPoint(term); // Insert before terminator
+
+	auto inputIt = m_input.rbegin();
+	auto localIt = m_local.begin();
+	for (auto globalIdx = -static_cast<ssize_t>(m_input.size()); globalIdx < size(); ++globalIdx)
 	{
-		// Not needed in case of ret instruction. Ret also invalidates the stack.
-		m_builder.SetInsertPoint(blockTerminator);
-
-		auto currIter = m_currentStack.begin();
-		auto endIter = m_currentStack.end();
-
-		// Update (emit set()) changed values
-		for (int idx = (int)m_currentStack.size() - 1 - m_tosOffset;
-			 currIter < endIter && idx >= 0;
-			 ++currIter, --idx)
+		llvm::Value* item = nullptr;
+		if (globalIdx < -m_globalPops)
 		{
-			assert(static_cast<size_t>(idx) < m_initialStack.size());
-			if (*currIter != m_initialStack[idx]) // value needs update
-				_evmStack.set(static_cast<size_t>(idx), *currIter);
+			item = *inputIt++;	// update input items (might contain original value)
+			if (!item)			// some items are skipped
+				continue;
 		}
-
-		// Pop values
-		if (m_tosOffset < 0)
-			_evmStack.pop(static_cast<size_t>(-m_tosOffset));
-
-		// Push new values
-		for (; currIter < endIter; ++currIter)
-		{
-			assert(*currIter != nullptr);
-			_evmStack.push(*currIter);
-		}
-	}
-
-	// Emit get() for all (used) values from the initial stack
-	for (size_t idx = 0; idx < m_initialStack.size(); ++idx)
-	{
-		auto val = m_initialStack[idx];
-		if (val == nullptr)
-			continue;
-
-		llvm::PHINode* phi = llvm::cast<llvm::PHINode>(val);
-		// Insert call to get() just before the PHI node and replace
-		// the uses of PHI with the uses of this new instruction.
-		m_builder.SetInsertPoint(phi);
-		auto newVal = _evmStack.get(idx); // OPT: Value may be never user but we need to check stack heigth
-		                                  //      It is probably a good idea to keep heigth as a local variable accesible by LLVM directly
-		phi->replaceAllUsesWith(newVal);
-		phi->eraseFromParent();
-	}
-
-	// Reset the stack
-	m_initialStack.erase(m_initialStack.begin(), m_initialStack.end());
-	m_currentStack.erase(m_currentStack.begin(), m_currentStack.end());
-	m_tosOffset = 0;
-}
-
-void BasicBlock::linkLocalStacks(std::vector<BasicBlock*> basicBlocks, llvm::IRBuilder<>& _builder)
-{
-	struct BBInfo
-	{
-		BasicBlock& bblock;
-		std::vector<BBInfo*> predecessors;
-		size_t inputItems;
-		size_t outputItems;
-		std::vector<llvm::PHINode*> phisToRewrite;
-
-		BBInfo(BasicBlock& _bblock) :
-			bblock(_bblock),
-			predecessors(),
-			inputItems(0),
-			outputItems(0)
-		{
-			auto& initialStack = bblock.m_initialStack;
-			for (auto it = initialStack.begin();
-				 it != initialStack.end() && *it != nullptr;
-				 ++it, ++inputItems);
-
-			//if (bblock.localStack().m_tosOffset > 0)
-			//	outputItems = bblock.localStack().m_tosOffset;
-			auto& exitStack = bblock.m_currentStack;
-			for (auto it = exitStack.rbegin();
-				 it != exitStack.rend() && *it != nullptr;
-				 ++it, ++outputItems);
-		}
-	};
-
-	std::map<llvm::BasicBlock*, BBInfo> cfg;
-
-	// Create nodes in cfg
-	for (auto bb : basicBlocks)
-		cfg.emplace(bb->llvm(), *bb);
-
-	// Create edges in cfg: for each bb info fill the list
-	// of predecessor infos.
-	for (auto& pair : cfg)
-	{
-		auto bb = pair.first;
-		auto& info = pair.second;
-
-		for (auto predIt = llvm::pred_begin(bb); predIt != llvm::pred_end(bb); ++predIt)
-		{
-			auto predInfoEntry = cfg.find(*predIt);
-			if (predInfoEntry != cfg.end()) // FIXME: It is wrong - will skip entry block
-				info.predecessors.push_back(&predInfoEntry->second);
-		}
-	}
-
-	// Iteratively compute inputs and outputs of each block, until reaching fixpoint.
-	bool valuesChanged = true;
-	while (valuesChanged)
-	{
-		for (auto& pair : cfg)
-		{
-			DLOG(bb) << pair.second.bblock.llvm()->getName().str()
-				<< ": in " << pair.second.inputItems
-				<< ", out " << pair.second.outputItems
-				<< "\n";
-		}
-
-		valuesChanged = false;
-		for (auto& pair : cfg)
-		{
-			auto& info = pair.second;
-
-			if (&info.bblock == basicBlocks.front())
-				info.inputItems = 0; // we cannot use phi nodes for first block as it is a successor of entry block
-
-			if (info.predecessors.empty())
-				info.inputItems = 0; // no consequences for other blocks, so leave valuesChanged false
-
-			for (auto predInfo : info.predecessors)
-			{
-				if (predInfo->outputItems < info.inputItems)
-				{
-					info.inputItems = predInfo->outputItems;
-					valuesChanged = true;
-				}
-				else if (predInfo->outputItems > info.inputItems)
-				{
-					predInfo->outputItems = info.inputItems;
-					valuesChanged = true;
-				}
-			}
-		}
-	}
-
-	// Propagate values between blocks.
-	for (auto& entry : cfg)
-	{
-		auto& info = entry.second;
-		auto& bblock = info.bblock;
-
-		llvm::BasicBlock::iterator fstNonPhi(bblock.llvm()->getFirstNonPHI());
-		auto phiIter = bblock.m_initialStack.begin();
-		for (size_t index = 0; index < info.inputItems; ++index, ++phiIter)
-		{
-			assert(llvm::isa<llvm::PHINode>(*phiIter));
-			auto phi = llvm::cast<llvm::PHINode>(*phiIter);
-
-			for (auto predIt : info.predecessors)
-			{
-				auto& predExitStack = predIt->bblock.m_currentStack;
-				auto value = *(predExitStack.end() - 1 - index);
-				phi->addIncoming(value, predIt->bblock.llvm());
-			}
-
-			// Move phi to the front
-			if (llvm::BasicBlock::iterator(phi) != bblock.llvm()->begin())
-			{
-				phi->removeFromParent();
-				_builder.SetInsertPoint(bblock.llvm(), bblock.llvm()->begin());
-				_builder.Insert(phi);
-			}
-		}
-
-		// The items pulled directly from predecessors block must be removed
-		// from the list of items that has to be popped from the initial stack.
-		auto& initialStack = bblock.m_initialStack;
-		initialStack.erase(initialStack.begin(), initialStack.begin() + info.inputItems);
-		// Initial stack shrinks, so the size difference grows:
-		bblock.m_tosOffset += (int)info.inputItems;
-	}
-
-	// We must account for the items that were pushed directly to successor
-	// blocks and thus should not be on the list of items to be pushed onto
-	// to EVM stack
-	for (auto& entry : cfg)
-	{
-		auto& info = entry.second;
-		auto& bblock = info.bblock;
-
-		auto& exitStack = bblock.m_currentStack;
-		exitStack.erase(exitStack.end() - info.outputItems, exitStack.end());
-		bblock.m_tosOffset -= (int)info.outputItems; // FIXME: Fix types
-	}
-}
-
-void BasicBlock::dump()
-{
-	dump(std::cerr, false);
-}
-
-void BasicBlock::dump(std::ostream& _out, bool _dotOutput)
-{
-	llvm::raw_os_ostream out(_out);
-
-	out << (_dotOutput ? "" : "Initial stack:\n");
-	for (auto val : m_initialStack)
-	{
-		if (val == nullptr)
-			out << "  ?";
-		else if (llvm::isa<llvm::ExtractValueInst>(val))
-			out << "  " << val->getName();
-		else if (llvm::isa<llvm::Instruction>(val))
-			out << *val;
 		else
-			out << "  " << *val;
+			item = *localIt++;	// store new items
 
-		out << (_dotOutput ? "\\l" : "\n");
+		auto slot = m_builder.CreateConstGEP1_64(m_sp, globalIdx);
+		m_builder.CreateAlignedStore(item, slot, 16); // TODO: Handle malloc alignment. Also for 32-bit systems.
 	}
-
-	out << (_dotOutput ? "| " : "Instructions:\n");
-	for (auto ins = m_llvmBB->begin(); ins != m_llvmBB->end(); ++ins)
-		out << *ins << (_dotOutput ? "\\l" : "\n");
-
-	if (! _dotOutput)
-		out << "Current stack (offset = " << m_tosOffset << "):\n";
-	else
-		out << "|";
-
-	for (auto val = m_currentStack.rbegin(); val != m_currentStack.rend(); ++val)
-	{
-		if (*val == nullptr)
-			out << "  ?";
-		else if (llvm::isa<llvm::ExtractValueInst>(*val))
-			out << "  " << (*val)->getName();
-		else if (llvm::isa<llvm::Instruction>(*val))
-			out << **val;
-		else
-			out << "  " << **val;
-		out << (_dotOutput ? "\\l" : "\n");
-	}
-
-	if (! _dotOutput)
-		out << "  ...\n----------------------------------------\n";
 }
 
 
+llvm::Function* LocalStack::getStackPrepareFunc()
+{
+	static const auto c_funcName = "stack.prepare";
+	if (auto func = getModule()->getFunction(c_funcName))
+		return func;
+
+	llvm::Type* argsTys[] = {Type::WordPtr, Type::Size->getPointerTo(), Type::Size, Type::Size, Type::Size, Type::BytePtr};
+	auto func = llvm::Function::Create(llvm::FunctionType::get(Type::WordPtr, argsTys, false), llvm::Function::PrivateLinkage, c_funcName, getModule());
+	func->setDoesNotThrow();
+	func->setDoesNotAccessMemory(1);
+	func->setDoesNotAlias(2);
+	func->setDoesNotCapture(2);
+
+	auto checkBB = llvm::BasicBlock::Create(func->getContext(), "Check", func);
+	auto updateBB = llvm::BasicBlock::Create(func->getContext(), "Update", func);
+	auto outOfStackBB = llvm::BasicBlock::Create(func->getContext(), "OutOfStack", func);
+
+	auto iter = func->arg_begin();
+	llvm::Argument* base = &(*iter++);
+	base->setName("base");
+	llvm::Argument* sizePtr = &(*iter++);
+	sizePtr->setName("size.ptr");
+	llvm::Argument* min = &(*iter++);
+	min->setName("min");
+	llvm::Argument* max = &(*iter++);
+	max->setName("max");
+	llvm::Argument* diff = &(*iter++);
+	diff->setName("diff");
+	llvm::Argument* jmpBuf = &(*iter);
+	jmpBuf->setName("jmpBuf");
+
+	InsertPointGuard guard{m_builder};
+	m_builder.SetInsertPoint(checkBB);
+	auto sizeAlignment = getModule()->getDataLayout().getABITypeAlignment(Type::Size);
+	auto size = m_builder.CreateAlignedLoad(sizePtr, sizeAlignment, "size");
+	auto minSize = m_builder.CreateAdd(size, min, "size.min", false, true);
+	auto maxSize = m_builder.CreateAdd(size, max, "size.max", true, true);
+	auto minOk = m_builder.CreateICmpSGE(minSize, m_builder.getInt64(0), "ok.min");
+	auto maxOk = m_builder.CreateICmpULE(maxSize, m_builder.getInt64(RuntimeManager::stackSizeLimit), "ok.max");
+	auto ok = m_builder.CreateAnd(minOk, maxOk, "ok");
+	m_builder.CreateCondBr(ok, updateBB, outOfStackBB, Type::expectTrue);
+
+	m_builder.SetInsertPoint(updateBB);
+	auto newSize = m_builder.CreateNSWAdd(size, diff, "size.next");
+	m_builder.CreateAlignedStore(newSize, sizePtr, sizeAlignment);
+	auto sp = m_builder.CreateGEP(base, size, "sp");
+	m_builder.CreateRet(sp);
+
+	m_builder.SetInsertPoint(outOfStackBB);
+	auto longjmp = llvm::Intrinsic::getDeclaration(getModule(), llvm::Intrinsic::eh_sjlj_longjmp);
+	m_builder.CreateCall(longjmp, {jmpBuf});
+	m_builder.CreateUnreachable();
+
+	return func;
+}
 
 
 }
 }
 }
-
