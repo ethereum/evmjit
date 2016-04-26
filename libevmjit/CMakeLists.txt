@@ -26,15 +26,15 @@ set(SOURCES
 )
 source_group("" FILES ${SOURCES})
 
-if(${CMAKE_CXX_COMPILER_ID} STREQUAL "MSVC")
+if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 else()
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -fvisibility=hidden")
-	if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+	if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 		set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--exclude-libs,ALL") # Do not export symbols from dependies, mostly LLVM libs
 	endif()
 endif()
 
-if(${EVMJIT_VERSION_MAJOR} EQUAL 0)
+if(EVMJIT_VERSION_MAJOR EQUAL 0)
 	set(EVMJIT_SOVERSION "0.${EVMJIT_VERSION_MINOR}")
 else()
 	set(EVMJIT_SOVERSION ${EVMJIT_VERSION_MAJOR})
