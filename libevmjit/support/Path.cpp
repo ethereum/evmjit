@@ -9,33 +9,9 @@ namespace dev
 {
 namespace path
 {
-	std::string user_home_directory()
-	{
-		#if UTILS_OS_POSIX
-			return std::getenv("HOME");
-		#elif UTILS_OS_WINDOWS
-			// Not needed on Windows
-		#else
-			static_assert(false, "Unsupported OS");
-		#endif
-		return {};
-	}
-
 	std::string user_cache_directory()
 	{
-		#if UTILS_OS_LINUX
-			auto xds_cache_home = std::getenv("XDG_CACHE_HOME");
-			if (xds_cache_home && *xds_cache_home != '\0')
-				return xds_cache_home;
-
-			auto home = user_home_directory();
-			if (!home.empty())
-				return home + "/.cache";
-		#elif UTILS_OS_MAC
-			auto home = user_home_directory();
-			if (!home.empty())
-				return home + "/Library/Caches";
-		#elif UTILS_OS_WINDOWS
+		#if UTILS_OS_WINDOWS
 			wchar_t* utf16Path = nullptr;
 			if (SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &utf16Path) != S_OK)
 				return {};
@@ -45,9 +21,18 @@ namespace path
 			CoTaskMemFree(utf16Path);
 			return {utf8Path, len};
 		#else
-			static_assert(false, "Unsupported OS");
+			auto cache_home = std::getenv("XDG_CACHE_HOME");
+			if (cache_home && *cache_home != '\0')
+				return cache_home;
+
+			auto home = std::getenv("HOME");
+			if (home && *home != '\0')
+			{
+				auto suffix = UTILS_OS_MAC ? "/Library/Caches" : "/.cache";
+				return std::string{home} + suffix;
+			}
+			return {};
 		#endif
-		return {};
 	}
 }
 }
