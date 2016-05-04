@@ -24,7 +24,7 @@ namespace path
 	std::string user_cache_directory()
 	{
 		#if UTILS_OS_LINUX
-			auto xds_cache_home = std::getenv("XDS_CACHE_HOME");
+			auto xds_cache_home = std::getenv("XDG_CACHE_HOME");
 			if (xds_cache_home && *xds_cache_home != '\0')
 				return xds_cache_home;
 
