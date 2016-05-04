@@ -33,7 +33,7 @@ namespace
 	std::string getVersionedCacheDir()
 	{
 		llvm::SmallString<256> path{path::user_cache_directory()};
-		static const auto c_ethereumAppName = UTILS_OS_LINUX ? "ethereum" : "Ethereum";
+		static const auto c_ethereumAppName = UTILS_OS_WINDOWS || UTILS_OS_MAC ? "Ethereum" : "ethereum";
 		llvm::sys::path::append(path, c_ethereumAppName, "evmjit", EVMJIT_VERSION);
 		return path.str();
 	}
