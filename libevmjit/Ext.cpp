@@ -128,7 +128,17 @@ llvm::Value* Ext::balance(llvm::Value* _address)
 {
 	auto address = Endianness::toBE(m_builder, _address);
 	auto ret = getArgAlloca();
-	createCall(EnvFunc::balance, {getRuntimeManager().getEnvPtr(), byPtr(address), ret});
+	auto& func = m_funcs[static_cast<size_t>(EnvFunc::balance)];
+	if (!func)
+	{
+		func = createFunc(EnvFunc::balance, getModule());
+
+		func->addAttribute(2, llvm::Attribute::ByVal);
+		func->addAttribute(2, llvm::Attribute::ReadOnly);
+	}
+
+	m_argCounter = 0;
+	m_builder.CreateCall(func, {getRuntimeManager().getEnvPtr(), byPtr(address), ret});
 	return m_builder.CreateLoad(ret);
 }
 
