@@ -39,7 +39,7 @@ std::array<FuncDesc, sizeOf<EnvFunc>::value> const& getEnvFuncDescs()
 		FuncDesc{"env_sload",   getFunctionType(Type::Void, {Type::EnvPtr, Type::WordPtr, Type::WordPtr})},
 		FuncDesc{"env_sstore",  getFunctionType(Type::Void, {Type::EnvPtr, Type::WordPtr, Type::WordPtr})},
 		FuncDesc{"env_sha3", getFunctionType(Type::Void, {Type::BytePtr, Type::Size, Type::WordPtr})},
-		FuncDesc{"env_balance", getFunctionType(Type::Void, {Type::EnvPtr, Type::WordPtr, Type::WordPtr})},
+		FuncDesc{"env_balance", getFunctionType(Type::Void, {Type::WordPtr, Type::EnvPtr, Type::WordPtr})},
 		FuncDesc{"env_create", getFunctionType(Type::Void, {Type::EnvPtr, Type::GasPtr, Type::WordPtr, Type::BytePtr, Type::Size, Type::WordPtr})},
 		FuncDesc{"env_call", getFunctionType(Type::Bool, {Type::EnvPtr, Type::GasPtr, Type::Gas, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::BytePtr, Type::Size, Type::BytePtr, Type::Size})},
 		FuncDesc{"env_log", getFunctionType(Type::Void, {Type::EnvPtr, Type::BytePtr, Type::Size, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr})},
@@ -133,12 +133,14 @@ llvm::Value* Ext::balance(llvm::Value* _address)
 	{
 		func = createFunc(EnvFunc::balance, getModule());
 
-		func->addAttribute(2, llvm::Attribute::ByVal);
-		func->addAttribute(2, llvm::Attribute::ReadOnly);
+		func->addAttribute(1, llvm::Attribute::StructRet);
+
+		func->addAttribute(3, llvm::Attribute::ByVal);
+		func->addAttribute(3, llvm::Attribute::ReadOnly);
 	}
 
 	m_argCounter = 0;
-	m_builder.CreateCall(func, {getRuntimeManager().getEnvPtr(), byPtr(address), ret});
+	m_builder.CreateCall(func, {ret, getRuntimeManager().getEnvPtr(), byPtr(address)});
 	return m_builder.CreateLoad(ret);
 }
 
