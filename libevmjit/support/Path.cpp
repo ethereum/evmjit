@@ -19,7 +19,7 @@ namespace path
 			char utf8Path[4 * MAX_PATH];
 			int len = WideCharToMultiByte(CP_UTF8, 0, utf16Path, lstrlenW(utf16Path), utf8Path, sizeof(utf8Path), nullptr, nullptr);
 			CoTaskMemFree(utf16Path);
-			return {utf8Path, len};
+			return {utf8Path, static_cast<size_t>(len)};
 		#else
 			auto cache_home = std::getenv("XDG_CACHE_HOME");
 			if (cache_home && *cache_home != '\0')
