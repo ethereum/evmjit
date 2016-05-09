@@ -12,10 +12,13 @@
 	#define EVMJIT_API __declspec(dllimport)
 #endif
 
-#define _ALLOW_KEYWORD_MACROS
-#define noexcept throw()
 #else
 #define EVMJIT_API [[gnu::visibility("default")]]
+#endif
+
+#if _MSC_VER && _MSC_VER < 1900
+#define _ALLOW_KEYWORD_MACROS
+#define noexcept throw()
 #endif
 
 namespace dev

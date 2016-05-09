@@ -8,8 +8,6 @@
 	#define EVMJIT_API __declspec(dllimport)
 #endif
 
-#define _ALLOW_KEYWORD_MACROS
-#define noexcept throw()
 #else
 #define EVMJIT_API [[gnu::visibility("default")]]
 #endif
