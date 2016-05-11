@@ -24,7 +24,7 @@ endif()
 
 # LLVM
 if (DEFINED APPLE)
-	set(LLVM_DIR "/usr/local/opt/llvm37/lib/llvm-3.7/share/llvm/cmake")
+	set(LLVM_DIR "/usr/local/opt/llvm38/lib/llvm-3.8/share/llvm/cmake")
 endif()
 
 find_package(LLVM REQUIRED CONFIG)
