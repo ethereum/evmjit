@@ -70,6 +70,8 @@ private:
 	llvm::CallInst* createCall(EnvFunc _funcId, std::initializer_list<llvm::Value*> const& _args);
 	llvm::Value* getArgAlloca();
 	llvm::Value* byPtr(llvm::Value* _value);
+
+	llvm::Value* createCABICall(llvm::Function* _func, std::initializer_list<llvm::Value*> const& _args);
 };
 
 

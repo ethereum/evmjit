@@ -2,6 +2,7 @@
 
 #include "preprocessor/llvm_includes_start.h"
 #include <llvm/IR/IntrinsicInst.h>
+#include <llvm/IR/Module.h>
 #include "preprocessor/llvm_includes_end.h"
 
 #include "RuntimeManager.h"
@@ -16,7 +17,7 @@ namespace eth
 namespace jit
 {
 
-Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
+Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan) :
 	RuntimeHelper(_runtimeManager),
 	m_memoryMan(_memoryMan)
 {
@@ -89,6 +90,29 @@ llvm::CallInst* Ext::createCall(EnvFunc _funcId, std::initializer_list<llvm::Val
 	return m_builder.CreateCall(func, {_args.begin(), _args.size()});
 }
 
+llvm::Value* Ext::createCABICall(llvm::Function* _func, std::initializer_list<llvm::Value*> const& _args)
+{
+	auto args = llvm::SmallVector<llvm::Value*, 8>{_args};
+	for (auto& arg: args)
+	{
+		// Pass values of type i256 as C struct i.e. by pointer.
+		if (arg->getType() == Type::Word)
+		{
+			auto mem = getArgAlloca();
+			m_builder.CreateStore(arg, mem);
+			arg = mem;
+		}
+	}
+
+	auto hasSRet = _func->hasStructRetAttr();
+	if (hasSRet)  // Prepare memory for return struct.
+		args.insert(args.begin(), getArgAlloca());
+
+	m_argCounter = 0;
+	llvm::Value* callRet = m_builder.CreateCall(_func, args);
+	return hasSRet ? m_builder.CreateLoad(args[0]) : callRet;
+}
+
 llvm::Value* Ext::sload(llvm::Value* _index)
 {
 	auto ret = getArgAlloca();
@@ -126,22 +150,23 @@ llvm::Value* Ext::calldataload(llvm::Value* _idx)
 
 llvm::Value* Ext::balance(llvm::Value* _address)
 {
-	auto address = Endianness::toBE(m_builder, _address);
-	auto ret = getArgAlloca();
-	auto& func = m_funcs[static_cast<size_t>(EnvFunc::balance)];
+	static const auto funcName = "env_balance";
+	auto func = getModule()->getFunction(funcName);
 	if (!func)
 	{
-		func = createFunc(EnvFunc::balance, getModule());
-
+		auto fty = llvm::FunctionType::get(Type::Void, {Type::WordPtr, Type::EnvPtr, Type::WordPtr}, false);
+		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, getModule());
 		func->addAttribute(1, llvm::Attribute::StructRet);
-
+		func->addAttribute(1, llvm::Attribute::NoAlias);
+		func->addAttribute(1, llvm::Attribute::NoCapture);
 		func->addAttribute(3, llvm::Attribute::ByVal);
 		func->addAttribute(3, llvm::Attribute::ReadOnly);
+		func->addAttribute(3, llvm::Attribute::NoAlias);
+		func->addAttribute(3, llvm::Attribute::NoCapture);
 	}
 
-	m_argCounter = 0;
-	m_builder.CreateCall(func, {ret, getRuntimeManager().getEnvPtr(), byPtr(address)});
-	return m_builder.CreateLoad(ret);
+	auto address = Endianness::toBE(m_builder, _address);
+	return createCABICall(func, {getRuntimeManager().getEnvPtr(), address});
 }
 
 llvm::Value* Ext::blockHash(llvm::Value* _number)
