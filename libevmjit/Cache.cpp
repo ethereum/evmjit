@@ -15,7 +15,6 @@
 #include "support/Path.h"
 #include "ExecStats.h"
 #include "Utils.h"
-#include "BuildInfo.gen.h"
 
 namespace dev
 {
@@ -24,6 +23,11 @@ namespace evmjit
 
 namespace
 {
+	/// The ABI version of jitted codes. It reflects how a generated code
+	/// communicates with outside world. When this communication changes old
+	/// cached code must be invalidated.
+	const auto c_internalABIVersion = 1;
+
 	using Guard = std::lock_guard<std::mutex>;
 	std::mutex x_cacheMutex;
 	CacheMode g_mode;
@@ -33,8 +37,8 @@ namespace
 	std::string getVersionedCacheDir()
 	{
 		llvm::SmallString<256> path{path::user_cache_directory()};
-		static const auto c_ethereumAppName = (UTILS_OS_WINDOWS || UTILS_OS_MAC) ? "Ethereum" : "ethereum";
-		llvm::sys::path::append(path, c_ethereumAppName, "evmjit", EVMJIT_VERSION);
+		llvm::sys::path::append(path, "ethereum", "evmjit",
+								std::to_string(c_internalABIVersion));
 		return path.str();
 	}
 
