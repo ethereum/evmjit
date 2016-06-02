@@ -2,6 +2,7 @@
 
 #include "preprocessor/llvm_includes_start.h"
 #include <llvm/IR/IntrinsicInst.h>
+#include <llvm/IR/Module.h>
 #include "preprocessor/llvm_includes_end.h"
 
 #include "RuntimeManager.h"
@@ -16,7 +17,7 @@ namespace eth
 namespace jit
 {
 
-Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
+Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan) :
 	RuntimeHelper(_runtimeManager),
 	m_memoryMan(_memoryMan)
 {
@@ -39,7 +40,7 @@ std::array<FuncDesc, sizeOf<EnvFunc>::value> const& getEnvFuncDescs()
 		FuncDesc{"env_sload",   getFunctionType(Type::Void, {Type::EnvPtr, Type::WordPtr, Type::WordPtr})},
 		FuncDesc{"env_sstore",  getFunctionType(Type::Void, {Type::EnvPtr, Type::WordPtr, Type::WordPtr})},
 		FuncDesc{"env_sha3", getFunctionType(Type::Void, {Type::BytePtr, Type::Size, Type::WordPtr})},
-		FuncDesc{"env_balance", getFunctionType(Type::Void, {Type::EnvPtr, Type::WordPtr, Type::WordPtr})},
+		FuncDesc{"env_balance", getFunctionType(Type::Void, {Type::WordPtr, Type::EnvPtr, Type::WordPtr})},
 		FuncDesc{"env_create", getFunctionType(Type::Void, {Type::EnvPtr, Type::GasPtr, Type::WordPtr, Type::BytePtr, Type::Size, Type::WordPtr})},
 		FuncDesc{"env_call", getFunctionType(Type::Bool, {Type::EnvPtr, Type::GasPtr, Type::Gas, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::BytePtr, Type::Size, Type::BytePtr, Type::Size})},
 		FuncDesc{"env_log", getFunctionType(Type::Void, {Type::EnvPtr, Type::BytePtr, Type::Size, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr})},
@@ -89,6 +90,29 @@ llvm::CallInst* Ext::createCall(EnvFunc _funcId, std::initializer_list<llvm::Val
 	return m_builder.CreateCall(func, {_args.begin(), _args.size()});
 }
 
+llvm::Value* Ext::createCABICall(llvm::Function* _func, std::initializer_list<llvm::Value*> const& _args)
+{
+	auto args = llvm::SmallVector<llvm::Value*, 8>{_args};
+	for (auto& arg: args)
+	{
+		// Pass values of type i256 as C struct i.e. by pointer.
+		if (arg->getType() == Type::Word)
+		{
+			auto mem = getArgAlloca();
+			m_builder.CreateStore(arg, mem);
+			arg = mem;
+		}
+	}
+
+	auto hasSRet = _func->hasStructRetAttr();
+	if (hasSRet)  // Prepare memory for return struct.
+		args.insert(args.begin(), getArgAlloca());
+
+	m_argCounter = 0;
+	llvm::Value* callRet = m_builder.CreateCall(_func, args);
+	return hasSRet ? m_builder.CreateLoad(args[0]) : callRet;
+}
+
 llvm::Value* Ext::sload(llvm::Value* _index)
 {
 	auto ret = getArgAlloca();
@@ -126,17 +150,43 @@ llvm::Value* Ext::calldataload(llvm::Value* _idx)
 
 llvm::Value* Ext::balance(llvm::Value* _address)
 {
+	static const auto funcName = "env_balance";
+	auto func = getModule()->getFunction(funcName);
+	if (!func)
+	{
+		auto fty = llvm::FunctionType::get(Type::Void, {Type::WordPtr, Type::EnvPtr, Type::WordPtr}, false);
+		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, getModule());
+		func->addAttribute(1, llvm::Attribute::StructRet);
+		func->addAttribute(1, llvm::Attribute::NoAlias);
+		func->addAttribute(1, llvm::Attribute::NoCapture);
+		func->addAttribute(3, llvm::Attribute::ByVal);
+		func->addAttribute(3, llvm::Attribute::ReadOnly);
+		func->addAttribute(3, llvm::Attribute::NoAlias);
+		func->addAttribute(3, llvm::Attribute::NoCapture);
+	}
+
 	auto address = Endianness::toBE(m_builder, _address);
-	auto ret = getArgAlloca();
-	createCall(EnvFunc::balance, {getRuntimeManager().getEnvPtr(), byPtr(address), ret});
-	return m_builder.CreateLoad(ret);
+	return createCABICall(func, {getRuntimeManager().getEnvPtr(), address});
 }
 
 llvm::Value* Ext::blockHash(llvm::Value* _number)
 {
-	auto hash = getArgAlloca();
-	createCall(EnvFunc::blockhash, {getRuntimeManager().getEnvPtr(), byPtr(_number), hash});
-	hash =  m_builder.CreateLoad(hash);
+	static const auto funcName = "env_blockhash";
+	auto func = getModule()->getFunction(funcName);
+	if (!func)
+	{
+		auto fty = llvm::FunctionType::get(Type::Void, {Type::WordPtr, Type::EnvPtr, Type::WordPtr}, false);
+		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, getModule());
+		func->addAttribute(1, llvm::Attribute::StructRet);
+		func->addAttribute(1, llvm::Attribute::NoAlias);
+		func->addAttribute(1, llvm::Attribute::NoCapture);
+		func->addAttribute(3, llvm::Attribute::ByVal);
+		func->addAttribute(3, llvm::Attribute::ReadOnly);
+		func->addAttribute(3, llvm::Attribute::NoAlias);
+		func->addAttribute(3, llvm::Attribute::NoCapture);
+	}
+
+	auto hash = createCABICall(func, {getRuntimeManager().getEnvPtr(), _number});
 	return Endianness::toNative(m_builder, hash);
 }
 
