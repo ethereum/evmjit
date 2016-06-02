@@ -7,6 +7,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/ADT/Triple.h>
 #include <llvm/ExecutionEngine/MCJIT.h>
+#include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/Host.h>
 #include <llvm/Support/CommandLine.h>
@@ -104,6 +105,18 @@ public:
 	ExecFunc compile(byte const* _code, uint64_t _codeSize, std::string const& _codeIdentifier, JITSchedule const& _schedule);
 };
 
+
+class SymbolResolver : public llvm::SectionMemoryManager
+{
+	llvm::RuntimeDyld::SymbolInfo findSymbol(std::string const& _name) override
+	{
+		if (_name == "env_sha3")
+			return {reinterpret_cast<uint64_t>(&keccak), llvm::JITSymbolFlags::Exported};
+		return llvm::SectionMemoryManager::findSymbol(_name);
+	}
+};
+
+
 JITImpl::JITImpl()
 {
 	parseOptions();
@@ -125,6 +138,7 @@ JITImpl::JITImpl()
 
 	llvm::EngineBuilder builder(std::move(module));
 	builder.setEngineKind(llvm::EngineKind::JIT);
+	builder.setMCJITMemoryManager(llvm::make_unique<SymbolResolver>());
 	builder.setOptLevel(g_optimize ? llvm::CodeGenOpt::Default : llvm::CodeGenOpt::None);
 
 	m_engine.reset(builder.create());
