@@ -2,7 +2,9 @@ cmake_minimum_required(VERSION 3.0.0)
 
 cmake_policy(SET CMP0042 OLD)	# Fix MACOSX_RPATH.
 cmake_policy(SET CMP0048 NEW)	# Allow VERSION argument in project().
-cmake_policy(SET CMP0054 NEW)	# No longer implicitly dereference variables.
+if (POLICY CMP0054)
+	cmake_policy(SET CMP0054 NEW)	# No longer implicitly dereference variables.
+endif()
 
 project(EVMJIT VERSION 0.9.0.2 LANGUAGES CXX)
 
