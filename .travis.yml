@@ -1,0 +1,23 @@
+language: cpp
+sudo: required
+dist: trusty
+compiler:
+  - gcc
+  - clang
+env:
+  - BUILD_TYPE=Release
+  - BUILD_TYPE=Debug
+cache:
+  - ccache
+  - directories: build/llvm
+
+
+before_install:
+  - sudo apt-add-repository -y ppa:george-edison55/cmake-3.x
+  - sudo apt-get -q update
+  - sudo apt-get -qy install cmake
+
+script:
+  - mkdir -p build && cd build
+  - cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE ..
+  - cmake --build .
