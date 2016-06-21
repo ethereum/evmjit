@@ -13,7 +13,14 @@ message(STATUS "EVM JIT ${EVMJIT_VERSION_MAJOR}.${EVMJIT_VERSION_MINOR}.${EVMJIT
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_AUTOMOC OFF)
 
-if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+	# Always use Release variant of C++ runtime.
+	# We don't want to provide Debug variants of all dependencies. Some default
+	# flags set by CMake must be tweaked.
+	string(REPLACE "/MDd" "/MD" CMAKE_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG})
+	string(REPLACE "/D_DEBUG" "" CMAKE_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG})
+	string(REPLACE "/RTC1" "" CMAKE_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG})
+	set_property(GLOBAL PROPERTY DEBUG_CONFIGURATIONS OFF)
 else()
 	set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -Wextra -Wconversion -Wno-sign-conversion -Wno-unknown-pragmas ${CMAKE_CXX_FLAGS}")
 endif()
