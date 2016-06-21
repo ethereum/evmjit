@@ -50,10 +50,8 @@ set_target_properties(${TARGET_NAME} PROPERTIES
 						FOLDER "libs")
 
 target_include_directories(${TARGET_NAME} PUBLIC ${EVMJIT_INCLUDE_DIR})
-target_include_directories(${TARGET_NAME} PRIVATE ${LLVM_INCLUDE_DIRS})
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/gen)
-target_compile_definitions(${TARGET_NAME} PRIVATE ${LLVM_DEFINITIONS})
-target_link_libraries(${TARGET_NAME} PRIVATE ${LLVM_LIBS})
+target_link_libraries(${TARGET_NAME} PRIVATE llvm)
 
 install(TARGETS ${TARGET_NAME} LIBRARY DESTINATION lib ARCHIVE DESTINATION lib RUNTIME DESTINATION bin)
 install(DIRECTORY ${EVMJIT_INCLUDE_DIR} DESTINATION include)
