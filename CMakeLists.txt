@@ -6,9 +6,11 @@ if (POLICY CMP0054)
 	cmake_policy(SET CMP0054 NEW)	# No longer implicitly dereference variables.
 endif()
 
-project(EVMJIT VERSION 0.9.0.2 LANGUAGES CXX)
+project(EVMJIT VERSION 0.9.0.2 LANGUAGES CXX C)
 
 message(STATUS "EVM JIT ${EVMJIT_VERSION_MAJOR}.${EVMJIT_VERSION_MINOR}.${EVMJIT_VERSION_PATCH}")
+
+option(EVMJIT_INCLUDE_EXAMPLES "Generate build targets for the EVMJIT examples" OFF)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_AUTOMOC OFF)
@@ -35,3 +37,7 @@ include(cmake/llvm.cmake)
 configure_llvm_project(llvm)
 
 add_subdirectory(libevmjit)
+
+if (EVMJIT_INCLUDE_EXAMPLES)
+	add_subdirectory(examples)
+endif()
