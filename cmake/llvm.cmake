@@ -12,13 +12,23 @@ function(configure_llvm_project TARGET_NAME)
     if (LLVM_DIR)
         find_package(LLVM REQUIRED CONFIG)
         llvm_map_components_to_libnames(LIBS mcjit ipo x86codegen)
-        # Try to get location of MCJIT lib on Windows (Release build)
-        get_property(MAIN_LIB TARGET LLVMMCJIT PROPERTY IMPORTED_LOCATION_RELEASE)
-        if (NOT MAIN_LIB)
-            # On Unix fallback to non-config location
-            get_property(MAIN_LIB TARGET LLVMMCJIT PROPERTY IMPORTED_LOCATION)
+
+        # To create a fake imported library later on we need to know the
+        # location of some library
+        list(GET LIBS 0 MAIN_LIB)
+        get_property(CONFIGS TARGET ${MAIN_LIB} PROPERTY IMPORTED_CONFIGURATIONS)
+        list(GET CONFIGS 0 CONFIG)  # Just get the first one. Usually there is only one.
+        if (CONFIG)
+            get_property(MAIN_LIB TARGET ${MAIN_LIB} PROPERTY IMPORTED_LOCATION_${CONFIG})
+        else()
+            set(CONFIG Unknown)
+            get_property(MAIN_LIB TARGET ${MAIN_LIB} PROPERTY IMPORTED_LOCATION)
         endif()
-        message(STATUS "LLVM ${LLVM_VERSION} (${LLVM_DIR})")
+        message(STATUS "LLVM ${LLVM_VERSION} (${CONFIG}; ${LLVM_ENABLE_ASSERTIONS}; ${LLVM_DIR})")
+        if (NOT EXISTS ${MAIN_LIB})
+            # Add some diagnostics to detect issues before building.
+            message(FATAL_ERROR "LLVM library not found: ${MAIN_LIB}")
+        endif()
     else()
         # List of required LLVM libs.
         # Generated with `llvm-config --libs mcjit ipo x86codegen`
@@ -40,11 +50,6 @@ function(configure_llvm_project TARGET_NAME)
             set(SYSTEM_LIBS pthread z m curses)
         elseif (UNIX)
             set(SYSTEM_LIBS pthread z m tinfo dl)
-        endif()
-
-        if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-            # Clang needs this to build LLVM. Weird that the GCC does not.
-            set(DEFINES __STDC_LIMIT_MACROS __STDC_CONSTANT_MACROS)
         endif()
 
         include(ExternalProject)
@@ -79,11 +84,18 @@ function(configure_llvm_project TARGET_NAME)
         set(LIBS ${LIBFILES} ${SYSTEM_LIBS})
     endif()
 
+    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        # Clang needs this to build LLVM. Weird that the GCC does not.
+        set(DEFINES __STDC_LIMIT_MACROS __STDC_CONSTANT_MACROS)
+    endif()
+
     # Create the target representing
     add_library(${TARGET_NAME} STATIC IMPORTED)
     set_property(TARGET ${TARGET_NAME} PROPERTY INTERFACE_COMPILE_DEFINITIONS ${DEFINES})
     set_property(TARGET ${TARGET_NAME} PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${LLVM_INCLUDE_DIRS})
     set_property(TARGET ${TARGET_NAME} PROPERTY IMPORTED_LOCATION ${MAIN_LIB})
     set_property(TARGET ${TARGET_NAME} PROPERTY IMPORTED_LINK_INTERFACE_LIBRARIES ${LIBS})
-    add_dependencies(${TARGET_NAME} llvm-project)
+    if (TARGET llvm-project)
+        add_dependencies(${TARGET_NAME} llvm-project)
+    endif()
 endfunction()
