@@ -5,6 +5,8 @@
 #include <functional>
 #include <type_traits>
 
+#include <evm.h>
+
 #ifdef _MSC_VER
 #ifdef evmjit_EXPORTS
 	#define EVMJIT_API __declspec(dllexport)
@@ -189,6 +191,8 @@ public:
 class JIT
 {
 public:
+	/// This function is going to be replaced with evm_create().
+	EVMJIT_API static void init(evm_query_fn _queryFn);
 
 	/// Ask JIT if the EVM code is ready for execution.
 	/// Returns `true` if the EVM code has been compiled and loaded into memory.

@@ -103,6 +103,8 @@ public:
 	void mapExecFunc(std::string const& _codeIdentifier, ExecFunc _funcAddr);
 
 	ExecFunc compile(byte const* _code, uint64_t _codeSize, std::string const& _codeIdentifier, JITSchedule const& _schedule);
+
+	evm_query_fn queryFn = nullptr;
 };
 
 
@@ -112,6 +114,8 @@ class SymbolResolver : public llvm::SectionMemoryManager
 	{
 		if (_name == "env_sha3")
 			return {reinterpret_cast<uint64_t>(&keccak), llvm::JITSymbolFlags::Exported};
+		else if (_name == "evm.query")
+			return {reinterpret_cast<uint64_t>(JITImpl::instance().queryFn), llvm::JITSymbolFlags::Exported};
 		return llvm::SectionMemoryManager::findSymbol(_name);
 	}
 };
@@ -236,6 +240,11 @@ ReturnCode JIT::exec(ExecutionContext& _context, JITSchedule const& _schedule)
 	// 	statsCollector.stats.push_back(std::move(listener));
 
 	return returnCode;
+}
+
+void JIT::init(evm_query_fn _queryFn)
+{
+	JITImpl::instance().queryFn = _queryFn;
 }
 
 
