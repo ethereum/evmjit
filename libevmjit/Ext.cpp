@@ -1,5 +1,7 @@
 #include "Ext.h"
 
+#include <evm.h>
+
 #include "preprocessor/llvm_includes_start.h"
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/Module.h>
@@ -26,6 +28,8 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan) :
 	m_size = m_builder.CreateAlloca(Type::Size, nullptr, "env.size");
 }
 
+namespace
+{
 
 using FuncDesc = std::tuple<char const*, llvm::FunctionType*>;
 
@@ -56,6 +60,30 @@ llvm::Function* createFunc(EnvFunc _id, llvm::Module* _module)
 	auto&& desc = getEnvFuncDescs()[static_cast<size_t>(_id)];
 	return llvm::Function::Create(std::get<1>(desc), llvm::Function::ExternalLinkage, std::get<0>(desc), _module);
 }
+
+llvm::Function* getQueryFunc(llvm::Module* _module)
+{
+	static const auto funcName = "evm.query";
+	auto func = _module->getFunction(funcName);
+	if (!func)
+	{
+		auto i32 = llvm::IntegerType::getInt32Ty(_module->getContext());
+		auto fty = llvm::FunctionType::get(Type::Void, {Type::WordPtr, Type::EnvPtr, i32, Type::WordPtr}, false);
+		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, _module);
+		func->addAttribute(1, llvm::Attribute::StructRet);
+		func->addAttribute(1, llvm::Attribute::NoAlias);
+		func->addAttribute(1, llvm::Attribute::NoCapture);
+		func->addAttribute(4, llvm::Attribute::ByVal);
+		func->addAttribute(4, llvm::Attribute::ReadOnly);
+		func->addAttribute(4, llvm::Attribute::NoAlias);
+		func->addAttribute(4, llvm::Attribute::NoCapture);
+	}
+	return func;
+}
+
+}
+
+
 
 llvm::Value* Ext::getArgAlloca()
 {
@@ -150,23 +178,9 @@ llvm::Value* Ext::calldataload(llvm::Value* _idx)
 
 llvm::Value* Ext::balance(llvm::Value* _address)
 {
-	static const auto funcName = "env_balance";
-	auto func = getModule()->getFunction(funcName);
-	if (!func)
-	{
-		auto fty = llvm::FunctionType::get(Type::Void, {Type::WordPtr, Type::EnvPtr, Type::WordPtr}, false);
-		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, getModule());
-		func->addAttribute(1, llvm::Attribute::StructRet);
-		func->addAttribute(1, llvm::Attribute::NoAlias);
-		func->addAttribute(1, llvm::Attribute::NoCapture);
-		func->addAttribute(3, llvm::Attribute::ByVal);
-		func->addAttribute(3, llvm::Attribute::ReadOnly);
-		func->addAttribute(3, llvm::Attribute::NoAlias);
-		func->addAttribute(3, llvm::Attribute::NoCapture);
-	}
-
+	auto func = getQueryFunc(getModule());
 	auto address = Endianness::toBE(m_builder, _address);
-	return createCABICall(func, {getRuntimeManager().getEnvPtr(), address});
+	return createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_BALANCE), address});
 }
 
 llvm::Value* Ext::blockHash(llvm::Value* _number)
