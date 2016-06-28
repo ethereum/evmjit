@@ -185,22 +185,10 @@ llvm::Value* Ext::balance(llvm::Value* _address)
 
 llvm::Value* Ext::blockHash(llvm::Value* _number)
 {
-	static const auto funcName = "env_blockhash";
-	auto func = getModule()->getFunction(funcName);
-	if (!func)
-	{
-		auto fty = llvm::FunctionType::get(Type::Void, {Type::WordPtr, Type::EnvPtr, Type::WordPtr}, false);
-		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, getModule());
-		func->addAttribute(1, llvm::Attribute::StructRet);
-		func->addAttribute(1, llvm::Attribute::NoAlias);
-		func->addAttribute(1, llvm::Attribute::NoCapture);
-		func->addAttribute(3, llvm::Attribute::ByVal);
-		func->addAttribute(3, llvm::Attribute::ReadOnly);
-		func->addAttribute(3, llvm::Attribute::NoAlias);
-		func->addAttribute(3, llvm::Attribute::NoCapture);
-	}
-
-	auto hash = createCABICall(func, {getRuntimeManager().getEnvPtr(), _number});
+	auto func = getQueryFunc(getModule());
+	// TODO: We can explicitly trunc the number to i64. The optimizer will know
+	//       that we care only about these 64 bit, not all 256.
+	auto hash = createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_BLOCKHASH), _number});
 	return Endianness::toNative(m_builder, hash);
 }
 
