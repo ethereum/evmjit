@@ -144,6 +144,9 @@ JITImpl::JITImpl()
 	builder.setEngineKind(llvm::EngineKind::JIT);
 	builder.setMCJITMemoryManager(llvm::make_unique<SymbolResolver>());
 	builder.setOptLevel(g_optimize ? llvm::CodeGenOpt::Default : llvm::CodeGenOpt::None);
+	#ifndef NDEBUG
+	builder.setVerifyModules(true);
+	#endif
 
 	m_engine.reset(builder.create());
 
