@@ -67,6 +67,7 @@ llvm::Function* getQueryFunc(llvm::Module* _module)
 	auto func = _module->getFunction(funcName);
 	if (!func)
 	{
+		// TODO: Mark the function as pure to eliminate multiple calls.
 		auto i32 = llvm::IntegerType::getInt32Ty(_module->getContext());
 		auto fty = llvm::FunctionType::get(Type::Void, {Type::WordPtr, Type::EnvPtr, i32, Type::WordPtr}, false);
 		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, _module);
@@ -79,6 +80,15 @@ llvm::Function* getQueryFunc(llvm::Module* _module)
 		func->addAttribute(4, llvm::Attribute::NoCapture);
 	}
 	return func;
+}
+
+llvm::StructType* getMemRefTy(llvm::Module* _module)
+{
+	static const auto name = "evm.memref";
+	auto ty = _module->getTypeByName(name);
+	if (!ty)
+		ty = llvm::StructType::create({Type::BytePtr, Type::Size}, name);
+	return ty;
 }
 
 }
@@ -118,7 +128,7 @@ llvm::CallInst* Ext::createCall(EnvFunc _funcId, std::initializer_list<llvm::Val
 	return m_builder.CreateCall(func, {_args.begin(), _args.size()});
 }
 
-llvm::Value* Ext::createCABICall(llvm::Function* _func, std::initializer_list<llvm::Value*> const& _args)
+llvm::Value* Ext::createCABICall(llvm::Function* _func, std::initializer_list<llvm::Value*> const& _args, bool _derefOutput)
 {
 	auto args = llvm::SmallVector<llvm::Value*, 8>{_args};
 	for (auto& arg: args)
@@ -138,14 +148,16 @@ llvm::Value* Ext::createCABICall(llvm::Function* _func, std::initializer_list<ll
 
 	m_argCounter = 0;
 	llvm::Value* callRet = m_builder.CreateCall(_func, args);
-	return hasSRet ? m_builder.CreateLoad(args[0]) : callRet;
+	if (hasSRet)
+		return _derefOutput ? m_builder.CreateLoad(args[0]) : args[0];
+	else
+		return callRet;
 }
 
 llvm::Value* Ext::sload(llvm::Value* _index)
 {
-	auto ret = getArgAlloca();
-	createCall(EnvFunc::sload, {getRuntimeManager().getEnvPtr(), byPtr(_index), ret}); // Uses native endianness
-	return m_builder.CreateLoad(ret);
+	auto func = getQueryFunc(getModule());
+	return createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_STORAGE), _index});
 }
 
 void Ext::sstore(llvm::Value* _index, llvm::Value* _value)
@@ -233,11 +245,17 @@ llvm::Value* Ext::sha3(llvm::Value* _inOff, llvm::Value* _inSize)
 
 MemoryRef Ext::extcode(llvm::Value* _addr)
 {
-	auto addr = Endianness::toBE(m_builder, _addr);
-	auto code = createCall(EnvFunc::extcode, {getRuntimeManager().getEnvPtr(), byPtr(addr), m_size});
-	auto codeSize = m_builder.CreateLoad(m_size);
-	auto codeSize256 = m_builder.CreateZExt(codeSize, Type::Word);
-	return {code, codeSize256};
+	auto func = getQueryFunc(getModule());
+	// TODO: We care only about 20 bytes here. Can we do it better?
+	auto address = Endianness::toBE(m_builder, _addr);
+	auto vPtr = createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_CODE_BY_ADDRESS), address}, false);
+	auto memRefTy = getMemRefTy(getModule());
+	auto memRefPtr = m_builder.CreateBitCast(vPtr, memRefTy->getPointerTo());
+	auto memRef = m_builder.CreateLoad(memRefTy, memRefPtr, "memref");
+	auto code = m_builder.CreateExtractValue(memRef, 0, "code");
+	auto size = m_builder.CreateExtractValue(memRef, 1, "codesize");
+	auto size256 = m_builder.CreateZExt(size, Type::Word);
+	return {code, size256};
 }
 
 void Ext::log(llvm::Value* _memIdx, llvm::Value* _numBytes, std::array<llvm::Value*,4> const& _topics)
