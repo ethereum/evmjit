@@ -621,11 +621,20 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 		}
 
 		case Instruction::ADDRESS:
+			stack.push(_ext.query(EVM_ADDRESS));
+			break;
 		case Instruction::CALLER:
+			stack.push(_ext.query(EVM_CALLER));
+			break;
 		case Instruction::ORIGIN:
+			stack.push(_ext.query(EVM_ORIGIN));
+			break;
+		case Instruction::COINBASE:
+			stack.push(_ext.query(EVM_COINBASE));
+			break;
+
 		case Instruction::CALLVALUE:
 		case Instruction::GASPRICE:
-		case Instruction::COINBASE:
 		case Instruction::DIFFICULTY:
 		case Instruction::GASLIMIT:
 		case Instruction::NUMBER:
@@ -764,12 +773,10 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			_memory.require(outOff, outSize);	// Out buffer first as we guess it will be after the in one
 			_memory.require(inOff, inSize);
 
-			auto receiveAddress = codeAddress;
-			auto senderAddress = _runtimeManager.get(RuntimeData::Address);
-			if (inst == Instruction::CALLCODE || inst == Instruction::DELEGATECALL)
-				receiveAddress = _runtimeManager.get(RuntimeData::Address);
-			if (inst == Instruction::DELEGATECALL)
-				senderAddress = _runtimeManager.get(RuntimeData::Caller);
+			auto senderAddress = (inst == Instruction::DELEGATECALL) ?
+					_ext.query(EVM_CALLER) : _ext.query(EVM_ADDRESS);
+			auto receiveAddress = (inst == Instruction::CALLCODE || inst == Instruction::DELEGATECALL) ?
+					_ext.query(EVM_ADDRESS) : codeAddress;
 
 			auto ret = _ext.call(callGas, senderAddress, receiveAddress, codeAddress, valueTransfer, apparentValue, inOff, inSize, outOff, outSize);
 			_gasMeter.count(m_builder.getInt64(0), _runtimeManager.getJmpBuf(), _runtimeManager.getGasPtr());
