@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <evm.h>
 
 #include "CompilerHelper.h"
 
@@ -47,6 +48,7 @@ public:
 	llvm::Value* sload(llvm::Value* _index);
 	void sstore(llvm::Value* _index, llvm::Value* _value);
 
+	llvm::Value* query(evm_query_key _key);
 	llvm::Value* balance(llvm::Value* _address);
 	llvm::Value* calldataload(llvm::Value* _index);
 	llvm::Value* create(llvm::Value* _endowment, llvm::Value* _initOff, llvm::Value* _initSize);

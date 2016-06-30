@@ -188,6 +188,31 @@ llvm::Value* Ext::calldataload(llvm::Value* _idx)
 	return Endianness::toNative(m_builder, m_builder.CreateLoad(ret));
 }
 
+llvm::Value* Ext::query(evm_query_key _key)
+{
+	auto func = getQueryFunc(getModule());
+	auto undef = llvm::UndefValue::get(Type::WordPtr);
+	auto v = createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(_key), undef});
+	auto i160ty = m_builder.getIntNTy(160);
+
+	switch (_key)
+	{
+	case EVM_ADDRESS:
+	case EVM_CALLER:
+	case EVM_ORIGIN:
+	case EVM_COINBASE:
+		// TODO: Use a bit mask here, check what order is the best.
+		v = Endianness::toNative(m_builder, v);
+		v = m_builder.CreateTrunc(v, i160ty);
+		v = m_builder.CreateZExt(v, Type::Word);
+		break;
+	default:
+		break;
+	}
+
+	return v;
+}
+
 llvm::Value* Ext::balance(llvm::Value* _address)
 {
 	auto func = getQueryFunc(getModule());
