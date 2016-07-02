@@ -1,9 +1,10 @@
 language: cpp
+os:
+  - linux
+  - osx
 sudo: required
 dist: trusty
-compiler:
-  - gcc
-  - clang
+osx_image: xcode7.3  # This is OSX 10.11, cmake 3.5.
 env:
   - BUILD_TYPE=Release
   - BUILD_TYPE=Debug
@@ -13,9 +14,12 @@ cache:
 
 
 before_install:
-  - sudo apt-add-repository -y ppa:george-edison55/cmake-3.x
-  - sudo apt-get -q update
-  - sudo apt-get -qy install cmake
+  - |
+    if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
+      sudo apt-add-repository -y ppa:george-edison55/cmake-3.x
+      sudo apt-get -q update
+      sudo apt-get -qy install cmake
+    fi
 
 script:
   - mkdir -p build && cd build
