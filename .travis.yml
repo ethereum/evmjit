@@ -1,9 +1,9 @@
 language: cpp
-sudo: required
-dist: trusty
-compiler:
-  - gcc
-  - clang
+os:
+  - linux
+  - osx
+dist: trusty         # cmake 3.2
+osx_image: xcode7.3  # OSX 10.11, cmake 3.5
 env:
   - BUILD_TYPE=Release
   - BUILD_TYPE=Debug
@@ -13,9 +13,7 @@ cache:
 
 
 before_install:
-  - sudo apt-add-repository -y ppa:george-edison55/cmake-3.x
-  - sudo apt-get -q update
-  - sudo apt-get -qy install cmake
+  - cmake --version
 
 script:
   - mkdir -p build && cd build

@@ -47,9 +47,9 @@ function(configure_llvm_project TARGET_NAME)
         # System libs that LLVM depend on.
         # See `llvm-config --system-libs`
         if (APPLE)
-            set(SYSTEM_LIBS pthread z m curses)
+            set(SYSTEM_LIBS pthread)
         elseif (UNIX)
-            set(SYSTEM_LIBS pthread z m tinfo dl)
+            set(SYSTEM_LIBS pthread dl)
         endif()
 
         include(ExternalProject)
@@ -59,7 +59,10 @@ function(configure_llvm_project TARGET_NAME)
             SOURCE_DIR llvm/src/llvm
             URL http://llvm.org/releases/3.8.0/llvm-3.8.0.src.tar.xz
             URL_HASH SHA256=555b028e9ee0f6445ff8f949ea10e9cd8be0d084840e21fbbe1d31d51fc06e46
-            CMAKE_ARGS -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
+            CMAKE_ARGS -DCMAKE_BUILD_TYPE=Release
+                       -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
+                       -DLLVM_ENABLE_TERMINFO=OFF  # Disable terminal color support
+                       -DLLVM_ENABLE_ZLIB=OFF      # Disable compression support -- not needed at all
                        -DLLVM_TARGETS_TO_BUILD=X86
                        -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF
                        -DLLVM_INCLUDE_TESTS=OFF
