@@ -105,6 +105,7 @@ public:
 	ExecFunc compile(byte const* _code, uint64_t _codeSize, std::string const& _codeIdentifier, JITSchedule const& _schedule);
 
 	evm_query_fn queryFn = nullptr;
+	evm_update_fn updateFn = nullptr;
 };
 
 
@@ -116,6 +117,8 @@ class SymbolResolver : public llvm::SectionMemoryManager
 			return {reinterpret_cast<uint64_t>(&keccak), llvm::JITSymbolFlags::Exported};
 		else if (_name == "evm.query")
 			return {reinterpret_cast<uint64_t>(JITImpl::instance().queryFn), llvm::JITSymbolFlags::Exported};
+		else if (_name == "evm.update")
+			return {reinterpret_cast<uint64_t>(JITImpl::instance().updateFn), llvm::JITSymbolFlags::Exported};
 		return llvm::SectionMemoryManager::findSymbol(_name);
 	}
 };
@@ -245,9 +248,11 @@ ReturnCode JIT::exec(ExecutionContext& _context, JITSchedule const& _schedule)
 	return returnCode;
 }
 
-void JIT::init(evm_query_fn _queryFn)
+void JIT::init(evm_query_fn _queryFn, evm_update_fn _updateFn)
 {
-	JITImpl::instance().queryFn = _queryFn;
+	auto& jit = JITImpl::instance();
+	jit.queryFn = _queryFn;
+	jit.updateFn = _updateFn;
 }
 
 

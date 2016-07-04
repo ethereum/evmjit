@@ -82,6 +82,27 @@ llvm::Function* getQueryFunc(llvm::Module* _module)
 	return func;
 }
 
+llvm::Function* getUpdateFunc(llvm::Module* _module)
+{
+	static const auto funcName = "evm.update";
+	auto func = _module->getFunction(funcName);
+	if (!func)
+	{
+		auto i32 = llvm::IntegerType::getInt32Ty(_module->getContext());
+		auto fty = llvm::FunctionType::get(Type::Void, {Type::EnvPtr, i32, Type::WordPtr, Type::WordPtr}, false);
+		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, _module);
+		func->addAttribute(3, llvm::Attribute::ByVal);
+		func->addAttribute(3, llvm::Attribute::ReadOnly);
+		func->addAttribute(3, llvm::Attribute::NoAlias);
+		func->addAttribute(3, llvm::Attribute::NoCapture);
+		func->addAttribute(4, llvm::Attribute::ByVal);
+		func->addAttribute(4, llvm::Attribute::ReadOnly);
+		func->addAttribute(4, llvm::Attribute::NoAlias);
+		func->addAttribute(4, llvm::Attribute::NoCapture);
+	}
+	return func;
+}
+
 llvm::StructType* getMemRefTy(llvm::Module* _module)
 {
 	static const auto name = "evm.memref";
@@ -162,7 +183,8 @@ llvm::Value* Ext::sload(llvm::Value* _index)
 
 void Ext::sstore(llvm::Value* _index, llvm::Value* _value)
 {
-	createCall(EnvFunc::sstore, {getRuntimeManager().getEnvPtr(), byPtr(_index), byPtr(_value)}); // Uses native endianness
+	auto func = getUpdateFunc(getModule());
+	createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_SSTORE), _index, _value});
 }
 
 llvm::Value* Ext::calldataload(llvm::Value* _idx)
