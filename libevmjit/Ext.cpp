@@ -193,7 +193,6 @@ llvm::Value* Ext::query(evm_query_key _key)
 	auto func = getQueryFunc(getModule());
 	auto undef = llvm::UndefValue::get(Type::WordPtr);
 	auto v = createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(_key), undef});
-	auto i160ty = m_builder.getIntNTy(160);
 
 	switch (_key)
 	{
@@ -201,11 +200,20 @@ llvm::Value* Ext::query(evm_query_key _key)
 	case EVM_CALLER:
 	case EVM_ORIGIN:
 	case EVM_COINBASE:
-		// TODO: Use a bit mask here, check what order is the best.
+	{
+		auto mask160 = llvm::APInt(160, -1, true).zext(256);
 		v = Endianness::toNative(m_builder, v);
-		v = m_builder.CreateTrunc(v, i160ty);
-		v = m_builder.CreateZExt(v, Type::Word);
+		v = m_builder.CreateAnd(v, mask160);
 		break;
+	}
+	case EVM_GAS_LIMIT:
+	case EVM_NUMBER:
+	case EVM_TIMESTAMP:
+	{
+		auto mask63 = llvm::APInt(256, static_cast<uint64_t>(std::numeric_limits<uint64_t>::max()));
+		v = m_builder.CreateAnd(v, mask63);
+		break;
+	}
 	default:
 		break;
 	}
