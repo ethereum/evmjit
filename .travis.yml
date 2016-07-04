@@ -1,4 +1,8 @@
 language: cpp
+branches:
+  only:
+    - master
+    - develop
 os:
   - linux
   - osx
