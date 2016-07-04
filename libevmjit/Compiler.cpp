@@ -1,12 +1,10 @@
 #include "Compiler.h"
 
-#include <functional>
 #include <fstream>
 #include <chrono>
 #include <sstream>
 
 #include "preprocessor/llvm_includes_start.h"
-#include <llvm/ADT/STLExtras.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IntrinsicInst.h>
@@ -654,13 +652,8 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			break;
 
 		case Instruction::CALLVALUE:
-		{
-			// Pushes an element of runtime data on stack
-			auto value = _runtimeManager.get(inst);
-			value = m_builder.CreateZExt(value, Type::Word);
-			stack.push(value);
+			stack.push(_runtimeManager.getValue());
 			break;
-		}
 
 		case Instruction::CODESIZE:
 			stack.push(_runtimeManager.getCodeSize());
@@ -772,7 +765,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			llvm::Value* valueTransfer = nullptr;
 			if (inst == Instruction::DELEGATECALL)
 			{
-				apparentValue = _runtimeManager.get(RuntimeData::ApparentCallValue);
+				apparentValue = _runtimeManager.getValue();
 				valueTransfer = Constant::get(0);
 			}
 			else

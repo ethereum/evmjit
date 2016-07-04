@@ -23,8 +23,7 @@ public:
 	llvm::Value* getDataPtr();
 	llvm::Value* getEnvPtr();
 
-	llvm::Value* get(RuntimeData::Index _index);
-	llvm::Value* get(Instruction _inst);
+	llvm::Value* getValue();
 	llvm::Value* getGas();
 	llvm::Value* getGasPtr();
 	llvm::Value* getCallData();
@@ -59,7 +58,6 @@ private:
 	llvm::Value* getPtr(RuntimeData::Index _index);
 	void set(RuntimeData::Index _index, llvm::Value* _value);
 
-	llvm::Function* m_longjmp = nullptr;
 	llvm::Value* m_jmpBuf = nullptr;
 	llvm::Value* m_dataPtr = nullptr;
 	llvm::Value* m_gasPtr = nullptr;
