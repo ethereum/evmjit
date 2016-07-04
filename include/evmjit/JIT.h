@@ -76,7 +76,6 @@ struct RuntimeData
 		Code,
 		CodeSize,
 
-		SuicideDestAddress = Address,		///< Suicide balance destination address
 		ReturnData 		   = CallData,		///< Return data pointer (set only in case of RETURN)
 		ReturnDataSize 	   = CallDataSize,	///< Return data size (set only in case of RETURN)
 	};
@@ -146,7 +145,6 @@ enum class ReturnCode
 	// Success codes
 	Stop    = 0,
 	Return  = 1,
-	Suicide = 2,
 
 	// Standard error codes
 	OutOfGas           = -1,

@@ -805,17 +805,11 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 		}
 
 		case Instruction::SUICIDE:
-		{
-			_runtimeManager.registerSuicide(stack.pop());
-			_runtimeManager.exit(ReturnCode::Suicide); // TODO: Suicide is rare. Call Env::suicide directly and stop.
-			break;
-		}
-
+			_ext.selfdestruct(stack.pop());
+			// Fallthrough.
 		case Instruction::STOP:
-		{
 			_runtimeManager.exit(ReturnCode::Stop);
 			break;
-		}
 
 		case Instruction::LOG0:
 		case Instruction::LOG1:

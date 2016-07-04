@@ -59,6 +59,7 @@ public:
 	MemoryRef extcode(llvm::Value* _addr);
 
 	void log(llvm::Value* _memIdx, llvm::Value* _numBytes, std::array<llvm::Value*,4> const& _topics);
+	void selfdestruct(llvm::Value* _beneficiary);
 
 private:
 	Memory& m_memoryMan;
