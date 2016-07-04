@@ -187,6 +187,14 @@ void Ext::sstore(llvm::Value* _index, llvm::Value* _value)
 	createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_SSTORE), _index, _value});
 }
 
+void Ext::selfdestruct(llvm::Value* _beneficiary)
+{
+	auto func = getUpdateFunc(getModule());
+	auto b = Endianness::toBE(m_builder, _beneficiary);
+	auto undef = llvm::UndefValue::get(Type::WordPtr);
+	createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_SELFDESTRUCT), b, undef});
+}
+
 llvm::Value* Ext::calldataload(llvm::Value* _idx)
 {
 	auto ret = getArgAlloca();

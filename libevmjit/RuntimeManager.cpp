@@ -189,11 +189,6 @@ void RuntimeManager::registerReturnData(llvm::Value* _offset, llvm::Value* _size
 	set(RuntimeData::ReturnDataSize, size64);
 }
 
-void RuntimeManager::registerSuicide(llvm::Value* _balanceAddress)
-{
-	set(RuntimeData::SuicideDestAddress, _balanceAddress);
-}
-
 void RuntimeManager::exit(ReturnCode _returnCode)
 {
 	m_builder.CreateBr(m_exitBB);
