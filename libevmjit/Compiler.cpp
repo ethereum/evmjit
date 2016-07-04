@@ -633,12 +633,27 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			stack.push(_ext.query(EVM_COINBASE));
 			break;
 
-		case Instruction::CALLVALUE:
 		case Instruction::GASPRICE:
+			stack.push(_ext.query(EVM_GAS_PRICE));
+			break;
+
 		case Instruction::DIFFICULTY:
+			stack.push(_ext.query(EVM_DIFFICULTY));
+			break;
+
 		case Instruction::GASLIMIT:
+			stack.push(_ext.query(EVM_GAS_LIMIT));
+			break;
+
 		case Instruction::NUMBER:
+			stack.push(_ext.query(EVM_NUMBER));
+			break;
+
 		case Instruction::TIMESTAMP:
+			stack.push(_ext.query(EVM_TIMESTAMP));
+			break;
+
+		case Instruction::CALLVALUE:
 		{
 			// Pushes an element of runtime data on stack
 			auto value = _runtimeManager.get(inst);
