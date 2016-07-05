@@ -240,8 +240,11 @@ llvm::Value* Ext::query(evm_query_key _key)
 	case EVM_NUMBER:
 	case EVM_TIMESTAMP:
 	{
-		auto mask63 = llvm::APInt(256, static_cast<uint64_t>(std::numeric_limits<uint64_t>::max()));
-		v = m_builder.CreateAnd(v, mask63);
+		// Use only 64-bit -- single word. The rest is uninitialized.
+		// We could have mask 63 bits, but there is very little to gain in cost
+		// of additional and operation.
+		auto mask64 = llvm::APInt(256, std::numeric_limits<uint64_t>::max());
+		v = m_builder.CreateAnd(v, mask64);
 		break;
 	}
 	default:
