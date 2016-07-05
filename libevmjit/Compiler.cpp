@@ -824,10 +824,10 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			// This will commit the current cost block
 			_gasMeter.countLogData(numBytes);
 
-			std::array<llvm::Value*, 4> topics{{}};
+			llvm::SmallVector<llvm::Value*, 4> topics;
 			auto numTopics = static_cast<size_t>(inst) - static_cast<size_t>(Instruction::LOG0);
 			for (size_t i = 0; i < numTopics; ++i)
-				topics[i] = stack.pop();
+				topics.emplace_back(stack.pop());
 
 			_ext.log(beginIdx, numBytes, topics);
 			break;
