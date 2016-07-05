@@ -324,23 +324,43 @@ MemoryRef Ext::extcode(llvm::Value* _addr)
 	return {code, size256};
 }
 
-void Ext::log(llvm::Value* _memIdx, llvm::Value* _numBytes, std::array<llvm::Value*,4> const& _topics)
+void Ext::log(llvm::Value* _memIdx, llvm::Value* _numBytes, llvm::ArrayRef<llvm::Value*> _topics)
 {
-	auto begin = m_memoryMan.getBytePtr(_memIdx);
-	auto size = m_builder.CreateTrunc(_numBytes, Type::Size, "size");
-	llvm::Value* args[] = {getRuntimeManager().getEnvPtr(), begin, size, getArgAlloca(), getArgAlloca(), getArgAlloca(), getArgAlloca()};
-
-	auto topicArgPtr = &args[3];
-	for (auto&& topic : _topics)
+	if (!m_topics)
 	{
-		if (topic)
-			m_builder.CreateStore(Endianness::toBE(m_builder, topic), *topicArgPtr);
-		else
-			*topicArgPtr = llvm::ConstantPointerNull::get(Type::WordPtr);
-		++topicArgPtr;
+		InsertPointGuard g{m_builder};
+		auto& entryBB = getMainFunction()->front();
+		m_builder.SetInsertPoint(&entryBB, entryBB.begin());
+		m_topics = m_builder.CreateAlloca(Type::Word, m_builder.getInt32(4), "topics");
 	}
 
-	createCall(EnvFunc::log, {args[0], args[1], args[2], args[3], args[4], args[5], args[6]});  // TODO: use std::initializer_list<>
+	auto begin = m_memoryMan.getBytePtr(_memIdx);
+	auto size = m_builder.CreateTrunc(_numBytes, Type::Size, "size");
+
+	for (size_t i = 0; i < _topics.size(); ++i)
+	{
+		auto t = Endianness::toBE(m_builder, _topics[i]);
+		auto p = m_builder.CreateConstGEP1_32(m_topics, static_cast<unsigned>(i));
+		m_builder.CreateStore(t, p);
+	}
+
+	auto func = getUpdateFunc(getModule());
+	auto a = getArgAlloca();
+	auto memRefTy = getMemRefTy(getModule());
+	auto pMemRef = m_builder.CreateBitCast(a, memRefTy->getPointerTo());
+	auto pData = m_builder.CreateConstGEP2_32(memRefTy, pMemRef, 0, 0, "log.data");
+	m_builder.CreateStore(begin, pData);
+	auto pSize = m_builder.CreateConstGEP2_32(memRefTy, pMemRef, 0, 1, "log.size");
+	m_builder.CreateStore(size, pSize);
+
+	auto b = getArgAlloca();
+	pMemRef = m_builder.CreateBitCast(b, memRefTy->getPointerTo());
+	pData = m_builder.CreateConstGEP2_32(memRefTy, pMemRef, 0, 0, "topics.data");
+	m_builder.CreateStore(m_builder.CreateBitCast(m_topics, m_builder.getInt8PtrTy()), pData);
+	pSize = m_builder.CreateConstGEP2_32(memRefTy, pMemRef, 0, 1, "topics.size");
+	m_builder.CreateStore(m_builder.getInt64(_topics.size() * 32), pSize);
+
+	createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_LOG), a, b});
 }
 
 }

@@ -58,7 +58,7 @@ public:
 	llvm::Value* sha3(llvm::Value* _inOff, llvm::Value* _inSize);
 	MemoryRef extcode(llvm::Value* _addr);
 
-	void log(llvm::Value* _memIdx, llvm::Value* _numBytes, std::array<llvm::Value*,4> const& _topics);
+	void log(llvm::Value* _memIdx, llvm::Value* _numBytes, llvm::ArrayRef<llvm::Value*> _topics);
 	void selfdestruct(llvm::Value* _beneficiary);
 
 private:
@@ -69,6 +69,10 @@ private:
 	std::array<llvm::Function*, sizeOf<EnvFunc>::value> m_funcs;
 	std::array<llvm::Value*, 8> m_argAllocas;
 	size_t m_argCounter = 0;
+
+	/// Memory for array of up to 4 log topics
+	/// TODO: Merge this memory with args allocas.
+	llvm::Value* m_topics = nullptr;
 
 	llvm::CallInst* createCall(EnvFunc _funcId, std::initializer_list<llvm::Value*> const& _args);
 	llvm::Value* getArgAlloca();
