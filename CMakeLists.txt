@@ -10,6 +10,10 @@ project(EVMJIT VERSION 0.9.0.2 LANGUAGES CXX C)
 
 message(STATUS "EVM JIT ${EVMJIT_VERSION_MAJOR}.${EVMJIT_VERSION_MINOR}.${EVMJIT_VERSION_PATCH}")
 
+if (NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "x86_64|AMD64")
+	message(FATAL_ERROR "Target ${CMAKE_SYSTEM_PROCESSOR} not supported -- EVM JIT works only on x86_64 architecture")
+endif()
+
 option(EVMJIT_INCLUDE_EXAMPLES "Generate build targets for the EVMJIT examples" OFF)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
