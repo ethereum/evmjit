@@ -112,6 +112,49 @@ llvm::StructType* getMemRefTy(llvm::Module* _module)
 	return ty;
 }
 
+llvm::Function* getCallFunc(llvm::Module* _module)
+{
+	static const auto funcName = "evm.call";
+	auto func = _module->getFunction(funcName);
+	if (!func)
+	{
+		auto i32 = llvm::IntegerType::getInt32Ty(_module->getContext());
+		auto hash160Ty = llvm::IntegerType::getIntNTy(_module->getContext(), 160);
+		auto memRefTy = getMemRefTy(_module);
+		auto pMemRefTy = memRefTy->getPointerTo();
+		// TODO: Should be use Triple here?
+		#ifdef _MSC_VER
+		// On Windows this argument is passed by pointer.
+		auto inputTy = pMemRefTy;
+		#else
+		// On Unix this argument is passed by value.
+		auto inputTy = memRefTy;
+		#endif
+		auto fty = llvm::FunctionType::get(
+			Type::Gas,
+			{Type::EnvPtr, i32, Type::Gas, hash160Ty->getPointerTo(), Type::WordPtr, Type::BytePtr, Type::Size, pMemRefTy},
+			false);
+		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, _module);
+		func->addAttribute(4, llvm::Attribute::ByVal);
+		func->addAttribute(4, llvm::Attribute::ReadOnly);
+		func->addAttribute(4, llvm::Attribute::NoAlias);
+		func->addAttribute(4, llvm::Attribute::NoCapture);
+		func->addAttribute(5, llvm::Attribute::ByVal);
+		func->addAttribute(5, llvm::Attribute::ReadOnly);
+		func->addAttribute(5, llvm::Attribute::NoAlias);
+		func->addAttribute(5, llvm::Attribute::NoCapture);
+		if (inputTy->isPointerTy())
+		{
+			func->addAttribute(6, llvm::Attribute::ByVal);
+			func->addAttribute(6, llvm::Attribute::ReadOnly);
+			func->addAttribute(6, llvm::Attribute::NoCapture);
+		}
+		func->addAttribute(8, llvm::Attribute::ByVal);
+		func->addAttribute(8, llvm::Attribute::NoCapture);
+	}
+	return func;
+}
+
 }
 
 
@@ -152,20 +195,27 @@ llvm::CallInst* Ext::createCall(EnvFunc _funcId, std::initializer_list<llvm::Val
 llvm::Value* Ext::createCABICall(llvm::Function* _func, std::initializer_list<llvm::Value*> const& _args, bool _derefOutput)
 {
 	auto args = llvm::SmallVector<llvm::Value*, 8>{_args};
-	for (auto& arg: args)
-	{
-		// Pass values of type i256 as C struct i.e. by pointer.
-		if (arg->getType() == Type::Word)
-		{
-			auto mem = getArgAlloca();
-			m_builder.CreateStore(arg, mem);
-			arg = mem;
-		}
-	}
 
 	auto hasSRet = _func->hasStructRetAttr();
 	if (hasSRet)  // Prepare memory for return struct.
 		args.insert(args.begin(), getArgAlloca());
+
+	for (auto&& farg: _func->args())
+	{
+		if (farg.hasByValAttr())
+		{
+			auto& arg = args[farg.getArgNo()];
+			// TODO: Remove defensive check and always use it this way.
+			if (!arg->getType()->isPointerTy())
+			{
+				auto mem = getArgAlloca();
+				// TODO: The bitcast may be redundant
+				mem = m_builder.CreateBitCast(mem, arg->getType()->getPointerTo());
+				m_builder.CreateStore(arg, mem);
+				arg = mem;
+			}
+		}
+	}
 
 	m_argCounter = 0;
 	llvm::Value* callRet = m_builder.CreateCall(_func, args);
@@ -281,23 +331,6 @@ llvm::Value* Ext::create(llvm::Value* _endowment, llvm::Value* _initOff, llvm::V
 	return address;
 }
 
-llvm::Value* Ext::call(llvm::Value* _callGas, llvm::Value* _senderAddress, llvm::Value* _receiveAddress, llvm::Value* _codeAddress, llvm::Value* _valueTransfer, llvm::Value* _apparentValue, llvm::Value* _inOff, llvm::Value* _inSize, llvm::Value* _outOff, llvm::Value* _outSize)
-{
-	auto senderAddress = Endianness::toBE(m_builder, _senderAddress);
-	auto receiveAddress = Endianness::toBE(m_builder, _receiveAddress);
-	auto inBeg = m_memoryMan.getBytePtr(_inOff);
-	auto inSize = m_builder.CreateTrunc(_inSize, Type::Size, "in.size");
-	auto outBeg = m_memoryMan.getBytePtr(_outOff);
-	auto outSize = m_builder.CreateTrunc(_outSize, Type::Size, "out.size");
-	auto codeAddress = Endianness::toBE(m_builder, _codeAddress);
-	auto callGas = m_builder.CreateSelect(
-			m_builder.CreateICmpULE(_callGas, m_builder.CreateZExt(Constant::gasMax, Type::Word)),
-			m_builder.CreateTrunc(_callGas, Type::Gas),
-			Constant::gasMax);
-	auto ret = createCall(EnvFunc::call, {getRuntimeManager().getEnvPtr(), getRuntimeManager().getGasPtr(), callGas, byPtr(senderAddress), byPtr(receiveAddress), byPtr(codeAddress), byPtr(_valueTransfer), byPtr(_apparentValue), inBeg, inSize, outBeg, outSize});
-	return m_builder.CreateZExt(ret, Type::Word, "ret");
-}
-
 llvm::Value* Ext::sha3(llvm::Value* _inOff, llvm::Value* _inSize)
 {
 	auto begin = m_memoryMan.getBytePtr(_inOff);
@@ -361,6 +394,38 @@ void Ext::log(llvm::Value* _memIdx, llvm::Value* _numBytes, llvm::ArrayRef<llvm:
 	m_builder.CreateStore(m_builder.getInt64(_topics.size() * 32), pSize);
 
 	createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_LOG), a, b});
+}
+
+llvm::Value* Ext::call(evm_call_kind _kind,
+	                   llvm::Value* _gas,
+	                   llvm::Value* _addr,
+	                   llvm::Value* _value,
+	                   llvm::Value* _inOff,
+	                   llvm::Value* _inSize,
+	                   llvm::Value* _outOff,
+	                   llvm::Value* _outSize)
+{
+	auto memRefTy = getMemRefTy(getModule());
+	auto gas = m_builder.CreateTrunc(_gas, Type::Size);
+	auto addr = m_builder.CreateTrunc(_addr, m_builder.getIntNTy(160));
+	addr = Endianness::toBE(m_builder, addr);
+	auto inData = m_memoryMan.getBytePtr(_inOff);
+	auto inSize = m_builder.CreateTrunc(_inSize, Type::Size);
+	auto initMemRef = llvm::UndefValue::get(memRefTy);
+	auto outData = m_memoryMan.getBytePtr(_outOff);
+	auto outSize = m_builder.CreateTrunc(_outSize, Type::Size);
+	auto out = m_builder.CreateInsertValue(initMemRef, outData, 0);
+	out = m_builder.CreateInsertValue(out, outSize, 1);
+
+	auto func = getCallFunc(getModule());
+	return createCABICall(func, {getRuntimeManager().getEnvPtr(),
+	                      m_builder.getInt32(_kind),
+	                      gas,
+	                      addr,
+	                      _value,
+	                      inData,
+	                      inSize,
+	                      out});
 }
 
 }
