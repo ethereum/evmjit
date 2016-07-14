@@ -759,17 +759,12 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 		case Instruction::CALL:
 		case Instruction::CALLCODE:
 		{
+			auto kind = (inst == Instruction::CALL) ? EVM_CALL :
+			            (inst == Instruction::CALLCODE) ? EVM_CALLCODE : EVM_DELEGATECALL;
 			auto callGas = stack.pop();
-			auto codeAddress = stack.pop();
-			llvm::Value* apparentValue = nullptr;
-			llvm::Value* valueTransfer = nullptr;
-			if (inst == Instruction::DELEGATECALL)
-			{
-				apparentValue = _runtimeManager.getValue();
-				valueTransfer = Constant::get(0);
-			}
-			else
-				valueTransfer = apparentValue = stack.pop();
+			auto address = stack.pop();
+			auto value = (kind == EVM_DELEGATECALL) ?
+			             llvm::UndefValue::get(Type::Word) : stack.pop();
 			auto inOff = stack.pop();
 			auto inSize = stack.pop();
 			auto outOff = stack.pop();
@@ -781,14 +776,19 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			_memory.require(outOff, outSize);	// Out buffer first as we guess it will be after the in one
 			_memory.require(inOff, inSize);
 
-			auto senderAddress = (inst == Instruction::DELEGATECALL) ?
-					_ext.query(EVM_CALLER) : _ext.query(EVM_ADDRESS);
-			auto receiveAddress = (inst == Instruction::CALLCODE || inst == Instruction::DELEGATECALL) ?
-					_ext.query(EVM_ADDRESS) : codeAddress;
-
-			auto ret = _ext.call(callGas, senderAddress, receiveAddress, codeAddress, valueTransfer, apparentValue, inOff, inSize, outOff, outSize);
-			_gasMeter.count(m_builder.getInt64(0), _runtimeManager.getJmpBuf(), _runtimeManager.getGasPtr());
-			stack.push(ret);
+			auto transfer = m_builder.CreateICmpNE(value, Constant::get(0));
+			auto transferCost = m_builder.CreateSelect(transfer, m_builder.getInt64(9000), m_builder.getInt64(0));
+			_gasMeter.count(transferCost, _runtimeManager.getJmpBuf(), _runtimeManager.getGasPtr());
+			_gasMeter.count(callGas, _runtimeManager.getJmpBuf(), _runtimeManager.getGasPtr());
+			auto gas = m_builder.CreateTrunc(callGas, Type::Gas, "call.gas");
+			auto initCost = m_builder.CreateAdd(gas, transferCost, "call.initcost", true, true);
+			auto r = _ext.call(kind, gas, address, value, inOff, inSize, outOff, outSize);
+			auto ret = m_builder.CreateICmpSGE(r, m_builder.getInt64(0), "call.ret");
+			auto rmagic = m_builder.CreateSelect(ret, m_builder.getInt64(0), m_builder.getInt64(std::numeric_limits<int64_t>::min()), "call.rmagic");
+			auto finalCost = m_builder.CreateSub(r, rmagic, "call.finalcost");
+			_gasMeter.giveBack(initCost);
+			_gasMeter.count(finalCost, _runtimeManager.getJmpBuf(), _runtimeManager.getGasPtr());
+			stack.push(m_builder.CreateZExt(ret, Type::Word));
 			break;
 		}
 

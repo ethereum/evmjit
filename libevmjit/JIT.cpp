@@ -106,6 +106,7 @@ public:
 
 	evm_query_fn queryFn = nullptr;
 	evm_update_fn updateFn = nullptr;
+	evm_call_fn callFn = nullptr;
 };
 
 
@@ -119,6 +120,8 @@ class SymbolResolver : public llvm::SectionMemoryManager
 			return {reinterpret_cast<uint64_t>(JITImpl::instance().queryFn), llvm::JITSymbolFlags::Exported};
 		else if (_name == "evm.update")
 			return {reinterpret_cast<uint64_t>(JITImpl::instance().updateFn), llvm::JITSymbolFlags::Exported};
+		else if (_name == "evm.call")
+			return {reinterpret_cast<uint64_t>(JITImpl::instance().callFn), llvm::JITSymbolFlags::Exported};
 		return llvm::SectionMemoryManager::findSymbol(_name);
 	}
 };
@@ -248,11 +251,12 @@ ReturnCode JIT::exec(ExecutionContext& _context, JITSchedule const& _schedule)
 	return returnCode;
 }
 
-void JIT::init(evm_query_fn _queryFn, evm_update_fn _updateFn)
+void JIT::init(evm_query_fn _queryFn, evm_update_fn _updateFn, evm_call_fn _callFn)
 {
 	auto& jit = JITImpl::instance();
 	jit.queryFn = _queryFn;
 	jit.updateFn = _updateFn;
+	jit.callFn = _callFn;
 }
 
 
