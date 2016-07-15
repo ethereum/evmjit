@@ -120,36 +120,28 @@ llvm::Function* getCallFunc(llvm::Module* _module)
 	{
 		auto i32 = llvm::IntegerType::getInt32Ty(_module->getContext());
 		auto hash160Ty = llvm::IntegerType::getIntNTy(_module->getContext(), 160);
-		auto memRefTy = getMemRefTy(_module);
-		auto pMemRefTy = memRefTy->getPointerTo();
 		// TODO: Should be use Triple here?
 		#ifdef _MSC_VER
-		// On Windows this argument is passed by pointer.
-		auto inputTy = pMemRefTy;
+		auto onWindows = true;
 		#else
-		// On Unix this argument is passed by value.
-		auto inputTy = memRefTy;
+		auto onWindows = false;
 		#endif
 		auto fty = llvm::FunctionType::get(
 			Type::Gas,
-			{Type::EnvPtr, i32, Type::Gas, hash160Ty->getPointerTo(), Type::WordPtr, Type::BytePtr, Type::Size, pMemRefTy},
+			{Type::EnvPtr, i32, Type::Gas, hash160Ty->getPointerTo(), Type::WordPtr, Type::BytePtr, Type::Size, Type::BytePtr, Type::Size},
 			false);
 		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, _module);
 		func->addAttribute(4, llvm::Attribute::ByVal);
 		func->addAttribute(4, llvm::Attribute::ReadOnly);
 		func->addAttribute(4, llvm::Attribute::NoAlias);
 		func->addAttribute(4, llvm::Attribute::NoCapture);
-		func->addAttribute(5, llvm::Attribute::ByVal);
+		if (!onWindows)
+			func->addAttribute(5, llvm::Attribute::ByVal);
 		func->addAttribute(5, llvm::Attribute::ReadOnly);
 		func->addAttribute(5, llvm::Attribute::NoAlias);
 		func->addAttribute(5, llvm::Attribute::NoCapture);
-		if (inputTy->isPointerTy())
-		{
-			func->addAttribute(6, llvm::Attribute::ByVal);
-			func->addAttribute(6, llvm::Attribute::ReadOnly);
-			func->addAttribute(6, llvm::Attribute::NoCapture);
-		}
-		func->addAttribute(8, llvm::Attribute::ByVal);
+		func->addAttribute(6, llvm::Attribute::ReadOnly);
+		func->addAttribute(6, llvm::Attribute::NoCapture);
 		func->addAttribute(8, llvm::Attribute::NoCapture);
 	}
 	return func;
@@ -405,27 +397,21 @@ llvm::Value* Ext::call(evm_call_kind _kind,
 	                   llvm::Value* _outOff,
 	                   llvm::Value* _outSize)
 {
-	auto memRefTy = getMemRefTy(getModule());
 	auto gas = m_builder.CreateTrunc(_gas, Type::Size);
 	auto addr = m_builder.CreateTrunc(_addr, m_builder.getIntNTy(160));
 	addr = Endianness::toBE(m_builder, addr);
 	auto inData = m_memoryMan.getBytePtr(_inOff);
 	auto inSize = m_builder.CreateTrunc(_inSize, Type::Size);
-	auto initMemRef = llvm::UndefValue::get(memRefTy);
 	auto outData = m_memoryMan.getBytePtr(_outOff);
 	auto outSize = m_builder.CreateTrunc(_outSize, Type::Size);
-	auto out = m_builder.CreateInsertValue(initMemRef, outData, 0);
-	out = m_builder.CreateInsertValue(out, outSize, 1);
+
+	auto value = getArgAlloca();
+	m_builder.CreateStore(_value, value);
 
 	auto func = getCallFunc(getModule());
 	return createCABICall(func, {getRuntimeManager().getEnvPtr(),
-	                      m_builder.getInt32(_kind),
-	                      gas,
-	                      addr,
-	                      _value,
-	                      inData,
-	                      inSize,
-	                      out});
+	                      m_builder.getInt32(_kind), gas, addr, value,
+	                      inData, inSize, outData, outSize});
 }
 
 }
