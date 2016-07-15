@@ -742,8 +742,20 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			_memory.require(initOff, initSize);
 
 			_gasMeter.commitCostBlock();
-			auto address = _ext.create(endowment, initOff, initSize);
-			stack.push(address);
+			llvm::Value* r = nullptr;
+			llvm::Value* pAddr = nullptr;
+			std::tie(r, pAddr) = _ext.create(endowment, initOff, initSize);
+
+			auto ret = m_builder.CreateICmpSGE(r, m_builder.getInt64(0), "create.ret");
+			auto rmagic = m_builder.CreateSelect(ret, m_builder.getInt64(0), m_builder.getInt64(EVM_EXCEPTION), "call.rmagic");
+			auto finalCost = m_builder.CreateSub(r, rmagic, "create.finalcost");  // TODO: optimize
+			_gasMeter.count(finalCost, _runtimeManager.getJmpBuf(), _runtimeManager.getGasPtr());
+
+			llvm::Value* addr = m_builder.CreateLoad(pAddr);
+			addr = Endianness::toNative(m_builder, addr);
+			addr = m_builder.CreateZExt(addr, Type::Word);
+			addr = m_builder.CreateSelect(ret, addr, Constant::get(0));
+			stack.push(addr);
 			break;
 		}
 

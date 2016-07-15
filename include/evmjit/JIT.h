@@ -153,8 +153,6 @@ enum class ReturnCode
 	LLVMError          = -101,
 
 	UnexpectedException = -111,
-
-	LinkerWorkaround = -299,
 };
 
 class ExecutionContext

@@ -312,17 +312,6 @@ llvm::Value* Ext::blockHash(llvm::Value* _number)
 	return Endianness::toNative(m_builder, hash);
 }
 
-llvm::Value* Ext::create(llvm::Value* _endowment, llvm::Value* _initOff, llvm::Value* _initSize)
-{
-	auto ret = getArgAlloca();
-	auto begin = m_memoryMan.getBytePtr(_initOff);
-	auto size = m_builder.CreateTrunc(_initSize, Type::Size, "size");
-	createCall(EnvFunc::create, {getRuntimeManager().getEnvPtr(), getRuntimeManager().getGasPtr(), byPtr(_endowment), begin, size, ret});
-	llvm::Value* address = m_builder.CreateLoad(ret);
-	address = Endianness::toNative(m_builder, address);
-	return address;
-}
-
 llvm::Value* Ext::sha3(llvm::Value* _inOff, llvm::Value* _inSize)
 {
 	auto begin = m_memoryMan.getBytePtr(_inOff);
@@ -412,6 +401,26 @@ llvm::Value* Ext::call(evm_call_kind _kind,
 	return createCABICall(func, {getRuntimeManager().getEnvPtr(),
 	                      m_builder.getInt32(_kind), gas, addr, value,
 	                      inData, inSize, outData, outSize});
+}
+
+std::tuple<llvm::Value*, llvm::Value*> Ext::create(llvm::Value* _endowment, llvm::Value* _initOff, llvm::Value* _initSize)
+{
+	auto addrTy = m_builder.getIntNTy(160);
+	auto gas = getRuntimeManager().getGas();
+	auto value = getArgAlloca();
+	m_builder.CreateStore(_endowment, value);
+	auto inData = m_memoryMan.getBytePtr(_initOff);
+	auto inSize = m_builder.CreateTrunc(_initSize, Type::Size);
+	auto pAddr = m_builder.CreateBitCast(getArgAlloca(), m_builder.getInt8PtrTy());
+
+	auto func = getCallFunc(getModule());
+	auto ret = createCABICall(func, {getRuntimeManager().getEnvPtr(),
+	                             m_builder.getInt32(EVM_CREATE), gas,
+	                             llvm::UndefValue::get(addrTy),
+	                             value, inData, inSize, pAddr, m_builder.getInt64(20)});
+
+	pAddr = m_builder.CreateBitCast(pAddr, addrTy->getPointerTo());
+	return std::tuple<llvm::Value*, llvm::Value*>{ret, pAddr};
 }
 
 }
