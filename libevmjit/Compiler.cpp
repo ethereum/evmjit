@@ -746,10 +746,15 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			llvm::Value* pAddr = nullptr;
 			std::tie(r, pAddr) = _ext.create(endowment, initOff, initSize);
 
-			auto ret = m_builder.CreateICmpSGE(r, m_builder.getInt64(0), "create.ret");
-			auto rmagic = m_builder.CreateSelect(ret, m_builder.getInt64(0), m_builder.getInt64(EVM_EXCEPTION), "call.rmagic");
-			auto finalCost = m_builder.CreateSub(r, rmagic, "create.finalcost");  // TODO: optimize
-			_gasMeter.count(finalCost, _runtimeManager.getJmpBuf(), _runtimeManager.getGasPtr());
+			auto ret =
+				m_builder.CreateICmpSGE(r, m_builder.getInt64(0), "create.ret");
+			auto rmagic = m_builder.CreateSelect(
+				ret, m_builder.getInt64(0), m_builder.getInt64(EVM_EXCEPTION),
+				"call.rmagic");
+			// TODO: optimize
+			auto finalCost = m_builder.CreateSub(r, rmagic, "create.finalcost");
+			_gasMeter.count(finalCost, _runtimeManager.getJmpBuf(),
+							_runtimeManager.getGasPtr());
 
 			llvm::Value* addr = m_builder.CreateLoad(pAddr);
 			addr = Endianness::toNative(m_builder, addr);
@@ -764,19 +769,22 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			{
 				// invalid opcode
 				_runtimeManager.exit(ReturnCode::OutOfGas);
-				it = _basicBlock.end() - 1; // finish block compilation
+				it = _basicBlock.end() - 1;  // finish block compilation
 				break;
 			}
-			// else, fall-through
+		// else, fall-through
 		case Instruction::CALL:
 		case Instruction::CALLCODE:
 		{
-			auto kind = (inst == Instruction::CALL) ? EVM_CALL :
-			            (inst == Instruction::CALLCODE) ? EVM_CALLCODE : EVM_DELEGATECALL;
+			auto kind = (inst == Instruction::CALL) ?
+							EVM_CALL :
+							(inst == Instruction::CALLCODE) ? EVM_CALLCODE :
+															  EVM_DELEGATECALL;
 			auto callGas = stack.pop();
 			auto address = stack.pop();
 			auto value = (kind == EVM_DELEGATECALL) ?
-			             llvm::UndefValue::get(Type::Word) : stack.pop();
+							 llvm::UndefValue::get(Type::Word) :
+							 stack.pop();
 			auto inOff = stack.pop();
 			auto inSize = stack.pop();
 			auto outOff = stack.pop();
@@ -785,21 +793,32 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			_gasMeter.commitCostBlock();
 
 			// Require memory for in and out buffers
-			_memory.require(outOff, outSize);	// Out buffer first as we guess it will be after the in one
+			_memory.require(outOff, outSize);  // Out buffer first as we guess
+											   // it will be after the in one
 			_memory.require(inOff, inSize);
 
 			auto transfer = m_builder.CreateICmpNE(value, Constant::get(0));
-			auto transferCost = m_builder.CreateSelect(transfer, m_builder.getInt64(9000), m_builder.getInt64(0));
-			_gasMeter.count(transferCost, _runtimeManager.getJmpBuf(), _runtimeManager.getGasPtr());
-			_gasMeter.count(callGas, _runtimeManager.getJmpBuf(), _runtimeManager.getGasPtr());
+			auto transferCost = m_builder.CreateSelect(
+				transfer, m_builder.getInt64(9000), m_builder.getInt64(0));
+			_gasMeter.count(transferCost, _runtimeManager.getJmpBuf(),
+							_runtimeManager.getGasPtr());
+			_gasMeter.count(callGas, _runtimeManager.getJmpBuf(),
+							_runtimeManager.getGasPtr());
 			auto gas = m_builder.CreateTrunc(callGas, Type::Gas, "call.gas");
-			auto initCost = m_builder.CreateAdd(gas, transferCost, "call.initcost", true, true);
-			auto r = _ext.call(kind, gas, address, value, inOff, inSize, outOff, outSize);
-			auto ret = m_builder.CreateICmpSGE(r, m_builder.getInt64(0), "call.ret");
-			auto rmagic = m_builder.CreateSelect(ret, m_builder.getInt64(0), m_builder.getInt64(EVM_EXCEPTION), "call.rmagic");
-			auto finalCost = m_builder.CreateSub(r, rmagic, "call.finalcost");  // TODO: optimize
+			auto initCost = m_builder.CreateAdd(gas, transferCost,
+												"call.initcost", true, true);
+			auto r = _ext.call(kind, gas, address, value, inOff, inSize, outOff,
+							   outSize);
+			auto ret =
+				m_builder.CreateICmpSGE(r, m_builder.getInt64(0), "call.ret");
+			auto rmagic = m_builder.CreateSelect(
+				ret, m_builder.getInt64(0), m_builder.getInt64(EVM_EXCEPTION),
+				"call.rmagic");
+			// TODO: optimize
+			auto finalCost = m_builder.CreateSub(r, rmagic, "call.finalcost");
 			_gasMeter.giveBack(initCost);
-			_gasMeter.count(finalCost, _runtimeManager.getJmpBuf(), _runtimeManager.getGasPtr());
+			_gasMeter.count(finalCost, _runtimeManager.getJmpBuf(),
+							_runtimeManager.getGasPtr());
 			stack.push(m_builder.CreateZExt(ret, Type::Word));
 			break;
 		}

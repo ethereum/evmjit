@@ -378,13 +378,13 @@ void Ext::log(llvm::Value* _memIdx, llvm::Value* _numBytes, llvm::ArrayRef<llvm:
 }
 
 llvm::Value* Ext::call(evm_call_kind _kind,
-	                   llvm::Value* _gas,
-	                   llvm::Value* _addr,
-	                   llvm::Value* _value,
-	                   llvm::Value* _inOff,
-	                   llvm::Value* _inSize,
-	                   llvm::Value* _outOff,
-	                   llvm::Value* _outSize)
+					   llvm::Value* _gas,
+					   llvm::Value* _addr,
+					   llvm::Value* _value,
+					   llvm::Value* _inOff,
+					   llvm::Value* _inSize,
+					   llvm::Value* _outOff,
+					   llvm::Value* _outSize)
 {
 	auto gas = m_builder.CreateTrunc(_gas, Type::Size);
 	auto addr = m_builder.CreateTrunc(_addr, m_builder.getIntNTy(160));
@@ -398,12 +398,14 @@ llvm::Value* Ext::call(evm_call_kind _kind,
 	m_builder.CreateStore(_value, value);
 
 	auto func = getCallFunc(getModule());
-	return createCABICall(func, {getRuntimeManager().getEnvPtr(),
-	                      m_builder.getInt32(_kind), gas, addr, value,
-	                      inData, inSize, outData, outSize});
+	return createCABICall(
+		func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(_kind), gas,
+			   addr, value, inData, inSize, outData, outSize});
 }
 
-std::tuple<llvm::Value*, llvm::Value*> Ext::create(llvm::Value* _endowment, llvm::Value* _initOff, llvm::Value* _initSize)
+std::tuple<llvm::Value*, llvm::Value*> Ext::create(llvm::Value* _endowment,
+												   llvm::Value* _initOff,
+												   llvm::Value* _initSize)
 {
 	auto addrTy = m_builder.getIntNTy(160);
 	auto gas = getRuntimeManager().getGas();
@@ -411,18 +413,18 @@ std::tuple<llvm::Value*, llvm::Value*> Ext::create(llvm::Value* _endowment, llvm
 	m_builder.CreateStore(_endowment, value);
 	auto inData = m_memoryMan.getBytePtr(_initOff);
 	auto inSize = m_builder.CreateTrunc(_initSize, Type::Size);
-	auto pAddr = m_builder.CreateBitCast(getArgAlloca(), m_builder.getInt8PtrTy());
+	auto pAddr =
+		m_builder.CreateBitCast(getArgAlloca(), m_builder.getInt8PtrTy());
 
 	auto func = getCallFunc(getModule());
-	auto ret = createCABICall(func, {getRuntimeManager().getEnvPtr(),
-	                             m_builder.getInt32(EVM_CREATE), gas,
-	                             llvm::UndefValue::get(addrTy),
-	                             value, inData, inSize, pAddr, m_builder.getInt64(20)});
+	auto ret = createCABICall(
+		func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_CREATE),
+			   gas, llvm::UndefValue::get(addrTy), value, inData, inSize, pAddr,
+			   m_builder.getInt64(20)});
 
 	pAddr = m_builder.CreateBitCast(pAddr, addrTy->getPointerTo());
 	return std::tuple<llvm::Value*, llvm::Value*>{ret, pAddr};
 }
-
 }
 }
 }
