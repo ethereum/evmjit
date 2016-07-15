@@ -784,8 +784,8 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			auto initCost = m_builder.CreateAdd(gas, transferCost, "call.initcost", true, true);
 			auto r = _ext.call(kind, gas, address, value, inOff, inSize, outOff, outSize);
 			auto ret = m_builder.CreateICmpSGE(r, m_builder.getInt64(0), "call.ret");
-			auto rmagic = m_builder.CreateSelect(ret, m_builder.getInt64(0), m_builder.getInt64(std::numeric_limits<int64_t>::min()), "call.rmagic");
-			auto finalCost = m_builder.CreateSub(r, rmagic, "call.finalcost");
+			auto rmagic = m_builder.CreateSelect(ret, m_builder.getInt64(0), m_builder.getInt64(EVM_EXCEPTION), "call.rmagic");
+			auto finalCost = m_builder.CreateSub(r, rmagic, "call.finalcost");  // TODO: optimize
 			_gasMeter.giveBack(initCost);
 			_gasMeter.count(finalCost, _runtimeManager.getJmpBuf(), _runtimeManager.getGasPtr());
 			stack.push(m_builder.CreateZExt(ret, Type::Word));
