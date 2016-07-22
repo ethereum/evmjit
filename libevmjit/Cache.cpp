@@ -77,7 +77,8 @@ void Cache::clear()
 		llvm::sys::fs::remove(it->path());
 }
 
-void Cache::preload(llvm::ExecutionEngine& _ee, std::unordered_map<std::string, uint64_t>& _funcCache)
+void Cache::preload(llvm::ExecutionEngine& _ee, std::unordered_map<std::string, uint64_t>& _funcCache,
+                    llvm::LLVMContext& _llvmContext)
 {
 	Guard g{x_cacheMutex};
 
@@ -90,7 +91,7 @@ void Cache::preload(llvm::ExecutionEngine& _ee, std::unordered_map<std::string, 
 	for (auto it = llvm::sys::fs::directory_iterator{cachePath, err}; it != decltype(it){}; it.increment(err))
 	{
 		auto name = it->path().substr(cachePath.size() + 1);
-		if (auto module = getObject(name))
+		if (auto module = getObject(name, _llvmContext))
 		{
 			DLOG(cache) << "Preload: " << name << "\n";
 			_ee.addModule(std::move(module));
@@ -103,7 +104,7 @@ void Cache::preload(llvm::ExecutionEngine& _ee, std::unordered_map<std::string, 
 	g_listener = listener;
 }
 
-std::unique_ptr<llvm::Module> Cache::getObject(std::string const& id)
+std::unique_ptr<llvm::Module> Cache::getObject(std::string const& id, llvm::LLVMContext& _llvmContext)
 {
 	Guard g{x_cacheMutex};
 
@@ -128,13 +129,12 @@ std::unique_ptr<llvm::Module> Cache::getObject(std::string const& id)
 
 	if (g_lastObject)  // if object found create fake module
 	{
-		DLOG(cache) << id << ": found\n";
-		auto&& context = llvm::getGlobalContext();
-		auto module = llvm::make_unique<llvm::Module>(id, context);
-		auto mainFuncType = llvm::FunctionType::get(llvm::Type::getVoidTy(context), {}, false);
+        DLOG(cache) << id << ": found\n";
+        auto module = llvm::make_unique<llvm::Module>(id, _llvmContext);
+		auto mainFuncType = llvm::FunctionType::get(llvm::Type::getVoidTy(_llvmContext), {}, false);
 		auto mainFunc = llvm::Function::Create(mainFuncType, llvm::Function::ExternalLinkage, id, module.get());
-		auto bb = llvm::BasicBlock::Create(context, {}, mainFunc);
-		bb->getInstList().push_back(new llvm::UnreachableInst{context});
+		auto bb = llvm::BasicBlock::Create(_llvmContext, {}, mainFunc);
+		bb->getInstList().push_back(new llvm::UnreachableInst{_llvmContext});
 		return module;
 	}
 	DLOG(cache) << id << ": not found\n";

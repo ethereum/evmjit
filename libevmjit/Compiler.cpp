@@ -30,10 +30,10 @@ namespace jit
 
 static const auto c_destIdxLabel = "destIdx";
 
-Compiler::Compiler(Options const& _options, JITSchedule const& _schedule):
+Compiler::Compiler(Options const& _options, JITSchedule const& _schedule, llvm::LLVMContext& _llvmContext):
 	m_options(_options),
 	m_schedule(_schedule),
-	m_builder(llvm::getGlobalContext())
+	m_builder(_llvmContext)
 {
 	Type::init(m_builder.getContext());
 }
