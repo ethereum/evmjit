@@ -26,7 +26,7 @@ public:
 		bool dumpCFG = false;
 	};
 
-	Compiler(Options const& _options, JITSchedule const& _schedule);
+	Compiler(Options const& _options, JITSchedule const& _schedule, llvm::LLVMContext& _llvmContext);
 
 	std::unique_ptr<llvm::Module> compile(code_iterator _begin, code_iterator _end, std::string const& _id);
 

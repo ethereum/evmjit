@@ -5,6 +5,7 @@
 
 #include "preprocessor/llvm_includes_start.h"
 #include <llvm/IR/Module.h>
+#include <llvm/IR/LLVMContext.h>
 #include <llvm/ADT/Triple.h>
 #include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
@@ -86,6 +87,14 @@ class JITImpl
 	mutable std::mutex x_codeMap;
 	std::unordered_map<std::string, ExecFunc> m_codeMap;
 
+	static llvm::LLVMContext& getLLVMContext()
+	{
+		// TODO: This probably should be thread_local, but for now that causes
+		// a crash when MCJIT is destroyed.
+		static llvm::LLVMContext llvmContext;
+		return llvmContext;
+	}
+
 public:
 	static JITImpl& instance()
 	{
@@ -138,7 +147,7 @@ JITImpl::JITImpl()
 	llvm::InitializeNativeTarget();
 	llvm::InitializeNativeTargetAsmPrinter();
 
-	auto module = llvm::make_unique<llvm::Module>(llvm::StringRef{}, llvm::getGlobalContext());
+	auto module = llvm::make_unique<llvm::Module>("", getLLVMContext());
 
 	// FIXME: LLVM 3.7: test on Windows
 	auto triple = llvm::Triple(llvm::sys::getProcessTriple());
@@ -181,13 +190,13 @@ void JITImpl::mapExecFunc(std::string const& _codeIdentifier, ExecFunc _funcAddr
 
 ExecFunc JITImpl::compile(byte const* _code, uint64_t _codeSize, std::string const& _codeIdentifier, JITSchedule const& _schedule)
 {
-	auto module = Cache::getObject(_codeIdentifier);
+	auto module = Cache::getObject(_codeIdentifier, getLLVMContext());
 	if (!module)
 	{
 		// TODO: Listener support must be redesigned. These should be a feature of JITImpl
 		//listener->stateChanged(ExecState::Compilation);
 		assert(_code || !_codeSize);
-		module = Compiler({}, _schedule).compile(_code, _code + _codeSize, _codeIdentifier);
+		module = Compiler({}, _schedule, getLLVMContext()).compile(_code, _code + _codeSize, _codeIdentifier);
 
 		if (g_optimize)
 		{
