@@ -116,6 +116,7 @@ public:
 	evm_query_fn queryFn = nullptr;
 	evm_update_fn updateFn = nullptr;
 	evm_call_fn callFn = nullptr;
+	bool hasDelegateCall = false;
 };
 
 
@@ -345,13 +346,78 @@ EVMJIT_API void evm_destroy(evm_instance* instance)
 	assert(instance == static_cast<void*>(&JITImpl::instance()));
 }
 
-//evm_result evm_execute(evm_instance* instance, evm_env* env,
-//                       evm_hash256 code_hash, char const* code,
-//                       size_t code_size, int64_t gas, char const* input,
-//                       size_t input_size, evm_uint256 value)
-//{
-//	auto& jit = *reinterpret_cast<JITImpl*>(instance);
-//}
+EVMJIT_API evm_result evm_execute(evm_instance* instance, evm_env* env,
+                       evm_hash256 code_hash, char const* code,
+                       size_t code_size, int64_t gas, char const* input,
+                       size_t input_size, evm_uint256 value)
+{
+	auto& jit = *reinterpret_cast<JITImpl*>(instance);
+
+	RuntimeData rt;
+	std::memcpy(&rt.codeHash, &code_hash, sizeof(code_hash));
+	rt.code = reinterpret_cast<byte const*>(code);
+	rt.codeSize = code_size;
+	rt.gas = gas;
+	rt.callData = reinterpret_cast<byte const*>(input);
+	rt.callDataSize = input_size;
+	std::memcpy(&rt.apparentValue, &value, sizeof(value));
+
+	ExecutionContext ctx{rt, reinterpret_cast<Env*>(env)};
+
+	evm_result result;
+	result.gas_left = EVM_EXCEPTION;
+	result.output_data = nullptr;
+	result.output_size = 0;
+	result.internal_memory = nullptr;
+
+	JITSchedule schedule;
+	schedule.haveDelegateCall = jit.hasDelegateCall;
+	auto suffix = jit.hasDelegateCall ? "-homestead" : "-frontier";
+	// FIXME: Change hoHex() interface.
+	auto codeIdentifier = toHex(*(std::array<byte, 32>*)&code_hash) + suffix;
+	auto execFunc = jit.getExecFunc(codeIdentifier);
+	if (!execFunc)
+	{
+		execFunc = jit.compile(ctx.code(), ctx.codeSize(), codeIdentifier, schedule);
+		if (!execFunc)
+			return result;
+		jit.mapExecFunc(codeIdentifier, execFunc);
+	}
+
+	auto returnCode = execFunc(&ctx);
+
+	if (returnCode != ReturnCode::OutOfGas)
+		result.gas_left = rt.gas;
+
+	if (returnCode == ReturnCode::Return)
+	{
+		auto out = ctx.getReturnData();
+		result.output_data = reinterpret_cast<char const*>(std::get<0>(out));
+		result.output_size = std::get<1>(out);
+	}
+
+	// Take care of the internal memory.
+	result.internal_memory = ctx.m_memData;
+	ctx.m_memData = nullptr;
+
+	return result;
+}
+
+EVMJIT_API void evm_destroy_result(evm_result result)
+{
+	if (result.internal_memory)
+		ext_free(result.internal_memory);  // FIXME: Check what is ext_free about.
+}
+
+EVMJIT_API bool evm_set_option(evm_instance* instance,
+                               char const* name,
+                               char const* value)
+{
+	auto& jit = *reinterpret_cast<JITImpl*>(instance);
+	if (std::string{"delegatecall"} == name)
+		jit.hasDelegateCall = (std::string{"true"} == value);
+	return true;
+}
 
 }  // extern "C"
 }
