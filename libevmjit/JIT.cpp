@@ -260,14 +260,6 @@ ReturnCode JIT::exec(ExecutionContext& _context, JITSchedule const& _schedule)
 	return returnCode;
 }
 
-void JIT::init(evm_query_fn _queryFn, evm_update_fn _updateFn, evm_call_fn _callFn)
-{
-	auto& jit = JITImpl::instance();
-	jit.queryFn = _queryFn;
-	jit.updateFn = _updateFn;
-	jit.callFn = _callFn;
-}
-
 
 extern "C" void ext_free(void* _data) noexcept;
 
@@ -333,5 +325,34 @@ std::string JITSchedule::codeIdentifier(h256 const& _codeHash) const
 }
 
 
+extern "C"
+{
+
+EVMJIT_API evm_instance* evm_create(evm_query_fn queryFn, evm_update_fn updateFn,
+									evm_call_fn callFn)
+{
+	// Let's always return the same instance. It's a bit of faking, but actually
+	// this might be a compliant implementation.
+	auto& jit = JITImpl::instance();
+	jit.queryFn = queryFn;
+	jit.updateFn = updateFn;
+	jit.callFn = callFn;
+	return reinterpret_cast<evm_instance*>(&jit);
+}
+
+EVMJIT_API void evm_destroy(evm_instance* instance)
+{
+	assert(instance == static_cast<void*>(&JITImpl::instance()));
+}
+
+//evm_result evm_execute(evm_instance* instance, evm_env* env,
+//                       evm_hash256 code_hash, char const* code,
+//                       size_t code_size, int64_t gas, char const* input,
+//                       size_t input_size, evm_uint256 value)
+//{
+//	auto& jit = *reinterpret_cast<JITImpl*>(instance);
+//}
+
+}  // extern "C"
 }
 }
