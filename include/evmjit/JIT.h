@@ -187,9 +187,6 @@ public:
 class JIT
 {
 public:
-	/// This function is going to be replaced with evm_create().
-	EVMJIT_API static void init(evm_query_fn _queryFn, evm_update_fn _updateFn, evm_call_fn _callFn);
-
 	/// Ask JIT if the EVM code is ready for execution.
 	/// Returns `true` if the EVM code has been compiled and loaded into memory.
 	/// In this case the code can be executed without overhead.
