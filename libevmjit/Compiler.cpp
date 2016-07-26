@@ -30,9 +30,9 @@ namespace jit
 
 static const auto c_destIdxLabel = "destIdx";
 
-Compiler::Compiler(Options const& _options, JITSchedule const& _schedule, llvm::LLVMContext& _llvmContext):
+Compiler::Compiler(Options const& _options, evm_mode _mode, llvm::LLVMContext& _llvmContext):
 	m_options(_options),
-	m_schedule(_schedule),
+	m_mode(_mode),
 	m_builder(_llvmContext)
 {
 	Type::init(m_builder.getContext());
@@ -174,7 +174,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(code_iterator _begin, code_itera
 
 	// Init runtime structures.
 	RuntimeManager runtimeManager(m_builder, _begin, _end);
-	GasMeter gasMeter(m_builder, runtimeManager, m_schedule);
+	GasMeter gasMeter(m_builder, runtimeManager);
 	Memory memory(runtimeManager, gasMeter);
 	Ext ext(runtimeManager, memory);
 	Arith256 arith(m_builder);
@@ -765,9 +765,9 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 		}
 
 		case Instruction::DELEGATECALL:
-			if (!m_schedule.haveDelegateCall)
+			if (m_mode == EVM_FRONTIER)
 			{
-				// invalid opcode
+				// Invalid opcode in Frontier compatibility mode.
 				_runtimeManager.exit(ReturnCode::OutOfGas);
 				it = _basicBlock.end() - 1;  // finish block compilation
 				break;

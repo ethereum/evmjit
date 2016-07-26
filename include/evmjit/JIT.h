@@ -128,13 +128,6 @@ struct JITSchedule
 	typedef std::integral_constant<uint64_t, 40> callGas;
 	typedef std::integral_constant<uint64_t, 3> memoryGas;
 	typedef std::integral_constant<uint64_t, 3> copyGas;
-	bool haveDelegateCall = true;
-
-	/// Computes a hash of the schedule.
-	int64_t id() const;
-
-	/// @returns an identifier for the code that is built from the code and the schedule data.
-	std::string codeIdentifier(h256 const& _codeHash) const;
 };
 
 /// VM Environment (ExtVM) opaque type
@@ -182,13 +175,6 @@ public:
 public:
 	/// Reference to returned data (RETURN opcode used)
 	bytes_ref returnData;
-};
-
-class JIT
-{
-public:
-	/// Execude the code given in @a _context and compile it if necessary.
-	static ReturnCode exec(ExecutionContext& _context, JITSchedule const& _schedule);
 };
 
 }
