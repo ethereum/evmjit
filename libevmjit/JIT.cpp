@@ -123,6 +123,7 @@ class SymbolResolver : public llvm::SectionMemoryManager
 {
 	llvm::RuntimeDyld::SymbolInfo findSymbol(std::string const& _name) override
 	{
+		// FIXME: Use string switch here.
 		if (_name == "env_sha3")
 			return {reinterpret_cast<uint64_t>(&keccak), llvm::JITSymbolFlags::Exported};
 		else if (_name == "evm.query")
@@ -263,20 +264,21 @@ EVMJIT_API void evm_destroy(evm_instance* instance)
 }
 
 EVMJIT_API evm_result evm_execute(evm_instance* instance, evm_env* env,
-                       evm_hash256 code_hash, char const* code,
-                       size_t code_size, int64_t gas, char const* input,
+                       evm_hash256 code_hash, uint8_t const* code,
+                       size_t code_size, int64_t gas, uint8_t const* input,
                        size_t input_size, evm_uint256 value)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
 
 	RuntimeData rt;
-	rt.code = reinterpret_cast<byte const*>(code);
+	rt.code = code;
 	rt.codeSize = code_size;
 	rt.gas = gas;
-	rt.callData = reinterpret_cast<byte const*>(input);
+	rt.callData = input;
 	rt.callDataSize = input_size;
 	std::memcpy(&rt.apparentValue, &value, sizeof(value));
 
+	// FIXME: Use evm_env* instead of Env*
 	ExecutionContext ctx{rt, reinterpret_cast<Env*>(env)};
 
 	evm_result result;
@@ -304,7 +306,7 @@ EVMJIT_API evm_result evm_execute(evm_instance* instance, evm_env* env,
 	if (returnCode == ReturnCode::Return)
 	{
 		auto out = ctx.getReturnData();
-		result.output_data = reinterpret_cast<char const*>(std::get<0>(out));
+		result.output_data = std::get<0>(out);
 		result.output_size = std::get<1>(out);
 	}
 
