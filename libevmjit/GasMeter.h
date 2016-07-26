@@ -5,10 +5,6 @@
 
 namespace dev
 {
-namespace evmjit
-{
-struct JITSchedule;
-}
 namespace eth
 {
 namespace jit
@@ -19,7 +15,7 @@ using namespace evmjit;
 class GasMeter : public CompilerHelper // TODO: Use RuntimeHelper
 {
 public:
-	GasMeter(IRBuilder& _builder, RuntimeManager& _runtimeManager, JITSchedule const& _schedule);
+	GasMeter(IRBuilder& _builder, RuntimeManager& _runtimeManager);
 
 	/// Count step cost of instruction
 	void count(Instruction _inst);
@@ -62,7 +58,6 @@ private:
 	llvm::Function* m_gasCheckFunc = nullptr;
 
 	RuntimeManager& m_runtimeManager;
-	JITSchedule const& m_schedule;
 };
 
 }
