@@ -270,7 +270,6 @@ EVMJIT_API evm_result evm_execute(evm_instance* instance, evm_env* env,
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
 
 	RuntimeData rt;
-	std::memcpy(&rt.codeHash, &code_hash, sizeof(code_hash));
 	rt.code = reinterpret_cast<byte const*>(code);
 	rt.codeSize = code_size;
 	rt.gas = gas;
