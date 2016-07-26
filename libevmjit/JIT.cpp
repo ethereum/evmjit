@@ -217,19 +217,6 @@ ExecFunc JITImpl::compile(byte const* _code, uint64_t _codeSize, std::string con
 
 } // anonymous namespace
 
-bool JIT::isCodeReady(std::string const& _codeIdentifier)
-{
-	return JITImpl::instance().getExecFunc(_codeIdentifier) != nullptr;
-}
-
-void JIT::compile(byte const* _code, uint64_t _codeSize, std::string const& _codeIdentifier, JITSchedule const& _schedule)
-{
-	auto& jit = JITImpl::instance();
-	auto execFunc = jit.compile(_code, _codeSize, _codeIdentifier, _schedule);
-	if (execFunc) // FIXME: What with error?
-		jit.mapExecFunc(_codeIdentifier, execFunc);
-}
-
 ReturnCode JIT::exec(ExecutionContext& _context, JITSchedule const& _schedule)
 {
 	//std::unique_ptr<ExecStats> listener{new ExecStats};
@@ -417,6 +404,31 @@ EVMJIT_API bool evm_set_option(evm_instance* instance,
 	if (std::string{"delegatecall"} == name)
 		jit.hasDelegateCall = (std::string{"true"} == value);
 	return true;
+}
+
+EVMJIT_API bool evmjit_is_code_ready(evm_instance* instance, evm_mode mode,
+                                     evm_hash256 code_hash)
+{
+	auto& jit = *reinterpret_cast<JITImpl*>(instance);
+	// FIXME: Refactor code identifier
+	auto suffix = (mode == EVM_HOMESTEAD) ? "-homestead" : "-frontier";
+	auto codeIdentifier = toHex(*(std::array<byte, 32>*)&code_hash) + suffix;
+	return jit.getExecFunc(codeIdentifier) != nullptr;
+}
+
+EVMJIT_API void evmjit_compile(evm_instance* instance, evm_mode mode,
+                               unsigned char const* code, size_t code_size,
+                               evm_hash256 code_hash)
+{
+	auto& jit = *reinterpret_cast<JITImpl*>(instance);
+	// FIXME: Refactor code identifier
+	JITSchedule schedule;
+	schedule.haveDelegateCall = mode == EVM_HOMESTEAD;
+	auto suffix = schedule.haveDelegateCall ? "-homestead" : "-frontier";
+	auto codeIdentifier = toHex(*(std::array<byte, 32>*)&code_hash) + suffix;
+	auto execFunc = jit.compile(code, code_size, codeIdentifier, schedule);
+	if (execFunc) // FIXME: What with error?
+		jit.mapExecFunc(codeIdentifier, execFunc);
 }
 
 }  // extern "C"

@@ -131,10 +131,10 @@ struct JITSchedule
 	bool haveDelegateCall = true;
 
 	/// Computes a hash of the schedule.
-	EVMJIT_API int64_t id() const;
+	int64_t id() const;
 
 	/// @returns an identifier for the code that is built from the code and the schedule data.
-	EVMJIT_API std::string codeIdentifier(h256 const& _codeHash) const;
+	std::string codeIdentifier(h256 const& _codeHash) const;
 };
 
 /// VM Environment (ExtVM) opaque type
@@ -162,7 +162,7 @@ public:
 	ExecutionContext(RuntimeData& _data, Env* _env) { init(_data, _env); }
 	ExecutionContext(ExecutionContext const&) = delete;
 	ExecutionContext& operator=(ExecutionContext const&) = delete;
-	EVMJIT_API ~ExecutionContext() noexcept;
+	~ExecutionContext() noexcept;
 
 	void init(RuntimeData& _data, Env* _env) { m_data = &_data; m_env = _env; }
 
@@ -187,22 +187,8 @@ public:
 class JIT
 {
 public:
-	/// Ask JIT if the EVM code is ready for execution.
-	/// Returns `true` if the EVM code has been compiled and loaded into memory.
-	/// In this case the code can be executed without overhead.
-	/// \param _codeIdentifier	the identifier of the code consisting of a hash of the code and the schedule.
-	EVMJIT_API static bool isCodeReady(std::string const& _codeIdentifier);
-
-	/// Compile the given EVM code to machine code and make available for execution.
-	EVMJIT_API static void compile(
-		byte const* _code,
-		uint64_t _codeSize,
-		std::string const& _codeIdentifier,
-		JITSchedule const& _schedule
-	);
-
 	/// Execude the code given in @a _context and compile it if necessary.
-	EVMJIT_API static ReturnCode exec(ExecutionContext& _context, JITSchedule const& _schedule);
+	static ReturnCode exec(ExecutionContext& _context, JITSchedule const& _schedule);
 };
 
 }
