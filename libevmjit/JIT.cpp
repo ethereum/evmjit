@@ -1,6 +1,5 @@
 #include "evmjit/JIT.h"
 
-#include <array>
 #include <mutex>
 
 #include "preprocessor/llvm_includes_start.h"
@@ -31,18 +30,19 @@ namespace
 {
 using ExecFunc = ReturnCode(*)(ExecutionContext*);
 
-template <size_t _size>
-std::string toHex(std::array<byte, _size> const& _data)
+/// Combine code hash and compatibility mode into a printable code identifier.
+std::string makeCodeId(evm_hash256 codeHash, evm_mode mode)
 {
 	static const auto hexChars = "0123456789abcdef";
 	std::string str;
-	str.resize(_size * 2);
-	auto outIt = str.rbegin(); // reverse for BE
-	for (auto b: _data)
+	str.reserve(sizeof(codeHash) * 2 + 1);
+	for (auto b: codeHash.bytes)
 	{
-		*(outIt++) = hexChars[b & 0xf];
-		*(outIt++) = hexChars[b >> 4];
+		// FIXME: Change evm_hash256.bytes to uint8_t[32].
+		str.push_back(hexChars[static_cast<uint8_t>(b) & 0xf]);
+		str.push_back(hexChars[static_cast<uint8_t>(b) >> 4]);
 	}
+	str.push_back(mode == EVM_FRONTIER ? 'F' : 'H');
 	return str;
 }
 
@@ -286,9 +286,7 @@ EVMJIT_API evm_result evm_execute(evm_instance* instance, evm_env* env,
 	result.internal_memory = nullptr;
 
 	auto mode = jit.hasDelegateCall ? EVM_HOMESTEAD : EVM_FRONTIER;
-	auto suffix = jit.hasDelegateCall ? "-homestead" : "-frontier";
-	// FIXME: Change hoHex() interface.
-	auto codeIdentifier = toHex(*(std::array<byte, 32>*)&code_hash) + suffix;
+	auto codeIdentifier = makeCodeId(code_hash, mode);
 	auto execFunc = jit.getExecFunc(codeIdentifier);
 	if (!execFunc)
 	{
@@ -337,9 +335,7 @@ EVMJIT_API bool evmjit_is_code_ready(evm_instance* instance, evm_mode mode,
                                      evm_hash256 code_hash)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
-	// FIXME: Refactor code identifier
-	auto suffix = (mode == EVM_HOMESTEAD) ? "-homestead" : "-frontier";
-	auto codeIdentifier = toHex(*(std::array<byte, 32>*)&code_hash) + suffix;
+	auto codeIdentifier = makeCodeId(code_hash, mode);
 	return jit.getExecFunc(codeIdentifier) != nullptr;
 }
 
@@ -348,9 +344,7 @@ EVMJIT_API void evmjit_compile(evm_instance* instance, evm_mode mode,
                                evm_hash256 code_hash)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
-	// FIXME: Refactor code identifier
-	auto suffix = (mode == EVM_HOMESTEAD) ? "-homestead" : "-frontier";
-	auto codeIdentifier = toHex(*(std::array<byte, 32>*)&code_hash) + suffix;
+	auto codeIdentifier = makeCodeId(code_hash, mode);
 	auto execFunc = jit.compile(mode, code, code_size, codeIdentifier);
 	if (execFunc) // FIXME: What with error?
 		jit.mapExecFunc(codeIdentifier, execFunc);
