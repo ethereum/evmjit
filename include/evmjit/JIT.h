@@ -31,27 +31,12 @@ namespace evmjit
 using byte = uint8_t;
 using bytes_ref = std::tuple<byte const*, size_t>;
 
-/// Representation of 256-bit hash value
-struct h256
-{
-	uint64_t words[4];
-};
-
-inline bool operator==(h256 const& _h1, h256 const& _h2)
-{
-	return 	_h1.words[0] == _h2.words[0] &&
-			_h1.words[1] == _h2.words[1] &&
-			_h1.words[2] == _h2.words[2] &&
-			_h1.words[3] == _h2.words[3];
-}
-
 /// Representation of 256-bit value binary compatible with LLVM i256
 struct i256
 {
 	uint64_t words[4];
 
 	i256() = default;
-	i256(h256 const& _h) { std::memcpy(this, &_h, sizeof(*this)); }
 };
 
 // TODO: Merge with ExecutionContext
@@ -98,7 +83,6 @@ struct RuntimeData
 	int64_t 	timestamp = 0;
 	byte const* code = nullptr;
 	uint64_t 	codeSize = 0;
-	h256		codeHash;
 };
 
 struct JITSchedule
@@ -161,7 +145,6 @@ public:
 
 	byte const* code() const { return m_data->code; }
 	uint64_t codeSize() const { return m_data->codeSize; }
-	h256 const& codeHash() const { return m_data->codeHash; }
 
 	bytes_ref getReturnData() const;
 
@@ -178,17 +161,4 @@ public:
 };
 
 }
-}
-
-namespace std
-{
-template<> struct hash<dev::evmjit::h256>
-{
-	size_t operator()(dev::evmjit::h256 const& _h) const
-	{
-		/// This implementation expects the argument to be a full 256-bit Keccak hash.
-		/// It does nothing more than returning a slice of the input hash.
-		return static_cast<size_t>(_h.words[0]);
-	};
-};
 }
