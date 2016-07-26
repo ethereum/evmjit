@@ -1,5 +1,7 @@
 #include "Ext.h"
 
+#include <evm.h>
+
 #include "preprocessor/llvm_includes_start.h"
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/Module.h>
@@ -26,6 +28,8 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan) :
 	m_size = m_builder.CreateAlloca(Type::Size, nullptr, "env.size");
 }
 
+namespace
+{
 
 using FuncDesc = std::tuple<char const*, llvm::FunctionType*>;
 
@@ -56,6 +60,96 @@ llvm::Function* createFunc(EnvFunc _id, llvm::Module* _module)
 	auto&& desc = getEnvFuncDescs()[static_cast<size_t>(_id)];
 	return llvm::Function::Create(std::get<1>(desc), llvm::Function::ExternalLinkage, std::get<0>(desc), _module);
 }
+
+llvm::Function* getQueryFunc(llvm::Module* _module)
+{
+	static const auto funcName = "evm.query";
+	auto func = _module->getFunction(funcName);
+	if (!func)
+	{
+		// TODO: Mark the function as pure to eliminate multiple calls.
+		auto i32 = llvm::IntegerType::getInt32Ty(_module->getContext());
+		auto fty = llvm::FunctionType::get(Type::Void, {Type::WordPtr, Type::EnvPtr, i32, Type::WordPtr}, false);
+		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, _module);
+		func->addAttribute(1, llvm::Attribute::StructRet);
+		func->addAttribute(1, llvm::Attribute::NoAlias);
+		func->addAttribute(1, llvm::Attribute::NoCapture);
+		func->addAttribute(4, llvm::Attribute::ByVal);
+		func->addAttribute(4, llvm::Attribute::ReadOnly);
+		func->addAttribute(4, llvm::Attribute::NoAlias);
+		func->addAttribute(4, llvm::Attribute::NoCapture);
+	}
+	return func;
+}
+
+llvm::Function* getUpdateFunc(llvm::Module* _module)
+{
+	static const auto funcName = "evm.update";
+	auto func = _module->getFunction(funcName);
+	if (!func)
+	{
+		auto i32 = llvm::IntegerType::getInt32Ty(_module->getContext());
+		auto fty = llvm::FunctionType::get(Type::Void, {Type::EnvPtr, i32, Type::WordPtr, Type::WordPtr}, false);
+		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, _module);
+		func->addAttribute(3, llvm::Attribute::ByVal);
+		func->addAttribute(3, llvm::Attribute::ReadOnly);
+		func->addAttribute(3, llvm::Attribute::NoAlias);
+		func->addAttribute(3, llvm::Attribute::NoCapture);
+		func->addAttribute(4, llvm::Attribute::ByVal);
+		func->addAttribute(4, llvm::Attribute::ReadOnly);
+		func->addAttribute(4, llvm::Attribute::NoAlias);
+		func->addAttribute(4, llvm::Attribute::NoCapture);
+	}
+	return func;
+}
+
+llvm::StructType* getMemRefTy(llvm::Module* _module)
+{
+	static const auto name = "evm.memref";
+	auto ty = _module->getTypeByName(name);
+	if (!ty)
+		ty = llvm::StructType::create({Type::BytePtr, Type::Size}, name);
+	return ty;
+}
+
+llvm::Function* getCallFunc(llvm::Module* _module)
+{
+	static const auto funcName = "evm.call";
+	auto func = _module->getFunction(funcName);
+	if (!func)
+	{
+		auto i32 = llvm::IntegerType::getInt32Ty(_module->getContext());
+		auto hash160Ty = llvm::IntegerType::getIntNTy(_module->getContext(), 160);
+		// TODO: Should be use Triple here?
+		#ifdef _MSC_VER
+		auto onWindows = true;
+		#else
+		auto onWindows = false;
+		#endif
+		auto fty = llvm::FunctionType::get(
+			Type::Gas,
+			{Type::EnvPtr, i32, Type::Gas, hash160Ty->getPointerTo(), Type::WordPtr, Type::BytePtr, Type::Size, Type::BytePtr, Type::Size},
+			false);
+		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, _module);
+		func->addAttribute(4, llvm::Attribute::ByVal);
+		func->addAttribute(4, llvm::Attribute::ReadOnly);
+		func->addAttribute(4, llvm::Attribute::NoAlias);
+		func->addAttribute(4, llvm::Attribute::NoCapture);
+		if (!onWindows)
+			func->addAttribute(5, llvm::Attribute::ByVal);
+		func->addAttribute(5, llvm::Attribute::ReadOnly);
+		func->addAttribute(5, llvm::Attribute::NoAlias);
+		func->addAttribute(5, llvm::Attribute::NoCapture);
+		func->addAttribute(6, llvm::Attribute::ReadOnly);
+		func->addAttribute(6, llvm::Attribute::NoCapture);
+		func->addAttribute(8, llvm::Attribute::NoCapture);
+	}
+	return func;
+}
+
+}
+
+
 
 llvm::Value* Ext::getArgAlloca()
 {
@@ -90,39 +184,57 @@ llvm::CallInst* Ext::createCall(EnvFunc _funcId, std::initializer_list<llvm::Val
 	return m_builder.CreateCall(func, {_args.begin(), _args.size()});
 }
 
-llvm::Value* Ext::createCABICall(llvm::Function* _func, std::initializer_list<llvm::Value*> const& _args)
+llvm::Value* Ext::createCABICall(llvm::Function* _func, std::initializer_list<llvm::Value*> const& _args, bool _derefOutput)
 {
 	auto args = llvm::SmallVector<llvm::Value*, 8>{_args};
-	for (auto& arg: args)
-	{
-		// Pass values of type i256 as C struct i.e. by pointer.
-		if (arg->getType() == Type::Word)
-		{
-			auto mem = getArgAlloca();
-			m_builder.CreateStore(arg, mem);
-			arg = mem;
-		}
-	}
 
 	auto hasSRet = _func->hasStructRetAttr();
 	if (hasSRet)  // Prepare memory for return struct.
 		args.insert(args.begin(), getArgAlloca());
 
+	for (auto&& farg: _func->args())
+	{
+		if (farg.hasByValAttr())
+		{
+			auto& arg = args[farg.getArgNo()];
+			// TODO: Remove defensive check and always use it this way.
+			if (!arg->getType()->isPointerTy())
+			{
+				auto mem = getArgAlloca();
+				// TODO: The bitcast may be redundant
+				mem = m_builder.CreateBitCast(mem, arg->getType()->getPointerTo());
+				m_builder.CreateStore(arg, mem);
+				arg = mem;
+			}
+		}
+	}
+
 	m_argCounter = 0;
 	llvm::Value* callRet = m_builder.CreateCall(_func, args);
-	return hasSRet ? m_builder.CreateLoad(args[0]) : callRet;
+	if (hasSRet)
+		return _derefOutput ? m_builder.CreateLoad(args[0]) : args[0];
+	else
+		return callRet;
 }
 
 llvm::Value* Ext::sload(llvm::Value* _index)
 {
-	auto ret = getArgAlloca();
-	createCall(EnvFunc::sload, {getRuntimeManager().getEnvPtr(), byPtr(_index), ret}); // Uses native endianness
-	return m_builder.CreateLoad(ret);
+	auto func = getQueryFunc(getModule());
+	return createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_STORAGE), _index});
 }
 
 void Ext::sstore(llvm::Value* _index, llvm::Value* _value)
 {
-	createCall(EnvFunc::sstore, {getRuntimeManager().getEnvPtr(), byPtr(_index), byPtr(_value)}); // Uses native endianness
+	auto func = getUpdateFunc(getModule());
+	createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_SSTORE), _index, _value});
+}
+
+void Ext::selfdestruct(llvm::Value* _beneficiary)
+{
+	auto func = getUpdateFunc(getModule());
+	auto b = Endianness::toBE(m_builder, _beneficiary);
+	auto undef = llvm::UndefValue::get(Type::WordPtr);
+	createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_SELFDESTRUCT), b, undef});
 }
 
 llvm::Value* Ext::calldataload(llvm::Value* _idx)
@@ -148,74 +260,56 @@ llvm::Value* Ext::calldataload(llvm::Value* _idx)
 	return Endianness::toNative(m_builder, m_builder.CreateLoad(ret));
 }
 
-llvm::Value* Ext::balance(llvm::Value* _address)
+llvm::Value* Ext::query(evm_query_key _key)
 {
-	static const auto funcName = "env_balance";
-	auto func = getModule()->getFunction(funcName);
-	if (!func)
+	auto func = getQueryFunc(getModule());
+	auto undef = llvm::UndefValue::get(Type::WordPtr);
+	auto v = createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(_key), undef});
+
+	switch (_key)
 	{
-		auto fty = llvm::FunctionType::get(Type::Void, {Type::WordPtr, Type::EnvPtr, Type::WordPtr}, false);
-		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, getModule());
-		func->addAttribute(1, llvm::Attribute::StructRet);
-		func->addAttribute(1, llvm::Attribute::NoAlias);
-		func->addAttribute(1, llvm::Attribute::NoCapture);
-		func->addAttribute(3, llvm::Attribute::ByVal);
-		func->addAttribute(3, llvm::Attribute::ReadOnly);
-		func->addAttribute(3, llvm::Attribute::NoAlias);
-		func->addAttribute(3, llvm::Attribute::NoCapture);
+	case EVM_ADDRESS:
+	case EVM_CALLER:
+	case EVM_ORIGIN:
+	case EVM_COINBASE:
+	{
+		auto mask160 = llvm::APInt(160, -1, true).zext(256);
+		v = Endianness::toNative(m_builder, v);
+		v = m_builder.CreateAnd(v, mask160);
+		break;
+	}
+	case EVM_GAS_LIMIT:
+	case EVM_NUMBER:
+	case EVM_TIMESTAMP:
+	{
+		// Use only 64-bit -- single word. The rest is uninitialized.
+		// We could have mask 63 bits, but there is very little to gain in cost
+		// of additional and operation.
+		auto mask64 = llvm::APInt(256, std::numeric_limits<uint64_t>::max());
+		v = m_builder.CreateAnd(v, mask64);
+		break;
+	}
+	default:
+		break;
 	}
 
+	return v;
+}
+
+llvm::Value* Ext::balance(llvm::Value* _address)
+{
+	auto func = getQueryFunc(getModule());
 	auto address = Endianness::toBE(m_builder, _address);
-	return createCABICall(func, {getRuntimeManager().getEnvPtr(), address});
+	return createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_BALANCE), address});
 }
 
 llvm::Value* Ext::blockHash(llvm::Value* _number)
 {
-	static const auto funcName = "env_blockhash";
-	auto func = getModule()->getFunction(funcName);
-	if (!func)
-	{
-		auto fty = llvm::FunctionType::get(Type::Void, {Type::WordPtr, Type::EnvPtr, Type::WordPtr}, false);
-		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, getModule());
-		func->addAttribute(1, llvm::Attribute::StructRet);
-		func->addAttribute(1, llvm::Attribute::NoAlias);
-		func->addAttribute(1, llvm::Attribute::NoCapture);
-		func->addAttribute(3, llvm::Attribute::ByVal);
-		func->addAttribute(3, llvm::Attribute::ReadOnly);
-		func->addAttribute(3, llvm::Attribute::NoAlias);
-		func->addAttribute(3, llvm::Attribute::NoCapture);
-	}
-
-	auto hash = createCABICall(func, {getRuntimeManager().getEnvPtr(), _number});
+	auto func = getQueryFunc(getModule());
+	// TODO: We can explicitly trunc the number to i64. The optimizer will know
+	//       that we care only about these 64 bit, not all 256.
+	auto hash = createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_BLOCKHASH), _number});
 	return Endianness::toNative(m_builder, hash);
-}
-
-llvm::Value* Ext::create(llvm::Value* _endowment, llvm::Value* _initOff, llvm::Value* _initSize)
-{
-	auto ret = getArgAlloca();
-	auto begin = m_memoryMan.getBytePtr(_initOff);
-	auto size = m_builder.CreateTrunc(_initSize, Type::Size, "size");
-	createCall(EnvFunc::create, {getRuntimeManager().getEnvPtr(), getRuntimeManager().getGasPtr(), byPtr(_endowment), begin, size, ret});
-	llvm::Value* address = m_builder.CreateLoad(ret);
-	address = Endianness::toNative(m_builder, address);
-	return address;
-}
-
-llvm::Value* Ext::call(llvm::Value* _callGas, llvm::Value* _senderAddress, llvm::Value* _receiveAddress, llvm::Value* _codeAddress, llvm::Value* _valueTransfer, llvm::Value* _apparentValue, llvm::Value* _inOff, llvm::Value* _inSize, llvm::Value* _outOff, llvm::Value* _outSize)
-{
-	auto senderAddress = Endianness::toBE(m_builder, _senderAddress);
-	auto receiveAddress = Endianness::toBE(m_builder, _receiveAddress);
-	auto inBeg = m_memoryMan.getBytePtr(_inOff);
-	auto inSize = m_builder.CreateTrunc(_inSize, Type::Size, "in.size");
-	auto outBeg = m_memoryMan.getBytePtr(_outOff);
-	auto outSize = m_builder.CreateTrunc(_outSize, Type::Size, "out.size");
-	auto codeAddress = Endianness::toBE(m_builder, _codeAddress);
-	auto callGas = m_builder.CreateSelect(
-			m_builder.CreateICmpULE(_callGas, m_builder.CreateZExt(Constant::gasMax, Type::Word)),
-			m_builder.CreateTrunc(_callGas, Type::Gas),
-			Constant::gasMax);
-	auto ret = createCall(EnvFunc::call, {getRuntimeManager().getEnvPtr(), getRuntimeManager().getGasPtr(), callGas, byPtr(senderAddress), byPtr(receiveAddress), byPtr(codeAddress), byPtr(_valueTransfer), byPtr(_apparentValue), inBeg, inSize, outBeg, outSize});
-	return m_builder.CreateZExt(ret, Type::Word, "ret");
 }
 
 llvm::Value* Ext::sha3(llvm::Value* _inOff, llvm::Value* _inSize)
@@ -231,32 +325,106 @@ llvm::Value* Ext::sha3(llvm::Value* _inOff, llvm::Value* _inSize)
 
 MemoryRef Ext::extcode(llvm::Value* _addr)
 {
-	auto addr = Endianness::toBE(m_builder, _addr);
-	auto code = createCall(EnvFunc::extcode, {getRuntimeManager().getEnvPtr(), byPtr(addr), m_size});
-	auto codeSize = m_builder.CreateLoad(m_size);
-	auto codeSize256 = m_builder.CreateZExt(codeSize, Type::Word);
-	return {code, codeSize256};
+	auto func = getQueryFunc(getModule());
+	// TODO: We care only about 20 bytes here. Can we do it better?
+	auto address = Endianness::toBE(m_builder, _addr);
+	auto vPtr = createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_CODE_BY_ADDRESS), address}, false);
+	auto memRefTy = getMemRefTy(getModule());
+	auto memRefPtr = m_builder.CreateBitCast(vPtr, memRefTy->getPointerTo());
+	auto memRef = m_builder.CreateLoad(memRefTy, memRefPtr, "memref");
+	auto code = m_builder.CreateExtractValue(memRef, 0, "code");
+	auto size = m_builder.CreateExtractValue(memRef, 1, "codesize");
+	auto size256 = m_builder.CreateZExt(size, Type::Word);
+	return {code, size256};
 }
 
-void Ext::log(llvm::Value* _memIdx, llvm::Value* _numBytes, std::array<llvm::Value*,4> const& _topics)
+void Ext::log(llvm::Value* _memIdx, llvm::Value* _numBytes, llvm::ArrayRef<llvm::Value*> _topics)
 {
-	auto begin = m_memoryMan.getBytePtr(_memIdx);
-	auto size = m_builder.CreateTrunc(_numBytes, Type::Size, "size");
-	llvm::Value* args[] = {getRuntimeManager().getEnvPtr(), begin, size, getArgAlloca(), getArgAlloca(), getArgAlloca(), getArgAlloca()};
-
-	auto topicArgPtr = &args[3];
-	for (auto&& topic : _topics)
+	if (!m_topics)
 	{
-		if (topic)
-			m_builder.CreateStore(Endianness::toBE(m_builder, topic), *topicArgPtr);
-		else
-			*topicArgPtr = llvm::ConstantPointerNull::get(Type::WordPtr);
-		++topicArgPtr;
+		InsertPointGuard g{m_builder};
+		auto& entryBB = getMainFunction()->front();
+		m_builder.SetInsertPoint(&entryBB, entryBB.begin());
+		m_topics = m_builder.CreateAlloca(Type::Word, m_builder.getInt32(4), "topics");
 	}
 
-	createCall(EnvFunc::log, {args[0], args[1], args[2], args[3], args[4], args[5], args[6]});  // TODO: use std::initializer_list<>
+	auto begin = m_memoryMan.getBytePtr(_memIdx);
+	auto size = m_builder.CreateTrunc(_numBytes, Type::Size, "size");
+
+	for (size_t i = 0; i < _topics.size(); ++i)
+	{
+		auto t = Endianness::toBE(m_builder, _topics[i]);
+		auto p = m_builder.CreateConstGEP1_32(m_topics, static_cast<unsigned>(i));
+		m_builder.CreateStore(t, p);
+	}
+
+	auto func = getUpdateFunc(getModule());
+	auto a = getArgAlloca();
+	auto memRefTy = getMemRefTy(getModule());
+	auto pMemRef = m_builder.CreateBitCast(a, memRefTy->getPointerTo());
+	auto pData = m_builder.CreateConstGEP2_32(memRefTy, pMemRef, 0, 0, "log.data");
+	m_builder.CreateStore(begin, pData);
+	auto pSize = m_builder.CreateConstGEP2_32(memRefTy, pMemRef, 0, 1, "log.size");
+	m_builder.CreateStore(size, pSize);
+
+	auto b = getArgAlloca();
+	pMemRef = m_builder.CreateBitCast(b, memRefTy->getPointerTo());
+	pData = m_builder.CreateConstGEP2_32(memRefTy, pMemRef, 0, 0, "topics.data");
+	m_builder.CreateStore(m_builder.CreateBitCast(m_topics, m_builder.getInt8PtrTy()), pData);
+	pSize = m_builder.CreateConstGEP2_32(memRefTy, pMemRef, 0, 1, "topics.size");
+	m_builder.CreateStore(m_builder.getInt64(_topics.size() * 32), pSize);
+
+	createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_LOG), a, b});
 }
 
+llvm::Value* Ext::call(evm_call_kind _kind,
+					   llvm::Value* _gas,
+					   llvm::Value* _addr,
+					   llvm::Value* _value,
+					   llvm::Value* _inOff,
+					   llvm::Value* _inSize,
+					   llvm::Value* _outOff,
+					   llvm::Value* _outSize)
+{
+	auto gas = m_builder.CreateTrunc(_gas, Type::Size);
+	auto addr = m_builder.CreateTrunc(_addr, m_builder.getIntNTy(160));
+	addr = Endianness::toBE(m_builder, addr);
+	auto inData = m_memoryMan.getBytePtr(_inOff);
+	auto inSize = m_builder.CreateTrunc(_inSize, Type::Size);
+	auto outData = m_memoryMan.getBytePtr(_outOff);
+	auto outSize = m_builder.CreateTrunc(_outSize, Type::Size);
+
+	auto value = getArgAlloca();
+	m_builder.CreateStore(_value, value);
+
+	auto func = getCallFunc(getModule());
+	return createCABICall(
+		func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(_kind), gas,
+			   addr, value, inData, inSize, outData, outSize});
+}
+
+std::tuple<llvm::Value*, llvm::Value*> Ext::create(llvm::Value* _endowment,
+												   llvm::Value* _initOff,
+												   llvm::Value* _initSize)
+{
+	auto addrTy = m_builder.getIntNTy(160);
+	auto gas = getRuntimeManager().getGas();
+	auto value = getArgAlloca();
+	m_builder.CreateStore(_endowment, value);
+	auto inData = m_memoryMan.getBytePtr(_initOff);
+	auto inSize = m_builder.CreateTrunc(_initSize, Type::Size);
+	auto pAddr =
+		m_builder.CreateBitCast(getArgAlloca(), m_builder.getInt8PtrTy());
+
+	auto func = getCallFunc(getModule());
+	auto ret = createCABICall(
+		func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_CREATE),
+			   gas, llvm::UndefValue::get(addrTy), value, inData, inSize, pAddr,
+			   m_builder.getInt64(20)});
+
+	pAddr = m_builder.CreateBitCast(pAddr, addrTy->getPointerTo());
+	return std::tuple<llvm::Value*, llvm::Value*>{ret, pAddr};
+}
 }
 }
 }

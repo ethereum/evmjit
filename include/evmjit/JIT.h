@@ -5,6 +5,8 @@
 #include <functional>
 #include <type_traits>
 
+#include <evm.h>
+
 #ifdef _MSC_VER
 #ifdef evmjit_EXPORTS
 	#define EVMJIT_API __declspec(dllexport)
@@ -74,7 +76,6 @@ struct RuntimeData
 		Code,
 		CodeSize,
 
-		SuicideDestAddress = Address,		///< Suicide balance destination address
 		ReturnData 		   = CallData,		///< Return data pointer (set only in case of RETURN)
 		ReturnDataSize 	   = CallDataSize,	///< Return data size (set only in case of RETURN)
 	};
@@ -144,7 +145,6 @@ enum class ReturnCode
 	// Success codes
 	Stop    = 0,
 	Return  = 1,
-	Suicide = 2,
 
 	// Standard error codes
 	OutOfGas           = -1,
@@ -153,8 +153,6 @@ enum class ReturnCode
 	LLVMError          = -101,
 
 	UnexpectedException = -111,
-
-	LinkerWorkaround = -299,
 };
 
 class ExecutionContext
@@ -189,6 +187,8 @@ public:
 class JIT
 {
 public:
+	/// This function is going to be replaced with evm_create().
+	EVMJIT_API static void init(evm_query_fn _queryFn, evm_update_fn _updateFn, evm_call_fn _callFn);
 
 	/// Ask JIT if the EVM code is ready for execution.
 	/// Returns `true` if the EVM code has been compiled and loaded into memory.

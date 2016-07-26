@@ -26,7 +26,7 @@ namespace
 	/// The ABI version of jitted codes. It reflects how a generated code
 	/// communicates with outside world. When this communication changes old
 	/// cached code must be invalidated.
-	const auto c_internalABIVersion = 1;
+	const auto c_internalABIVersion = 2;
 
 	using Guard = std::lock_guard<std::mutex>;
 	std::mutex x_cacheMutex;
