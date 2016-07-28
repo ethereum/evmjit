@@ -115,9 +115,6 @@ struct JITSchedule
 	typedef std::integral_constant<uint64_t, 9000> valueTransferGas;
 };
 
-/// VM Environment (ExtVM) opaque type
-struct Env;
-
 enum class ReturnCode
 {
 	// Success codes
@@ -137,12 +134,12 @@ class ExecutionContext
 {
 public:
 	ExecutionContext() = default;
-	ExecutionContext(RuntimeData& _data, Env* _env) { init(_data, _env); }
+	ExecutionContext(RuntimeData& _data, evm_env* _env) { init(_data, _env); }
 	ExecutionContext(ExecutionContext const&) = delete;
 	ExecutionContext& operator=(ExecutionContext const&) = delete;
 	~ExecutionContext() noexcept;
 
-	void init(RuntimeData& _data, Env* _env) { m_data = &_data; m_env = _env; }
+	void init(RuntimeData& _data, evm_env* _env) { m_data = &_data; m_env = _env; }
 
 	byte const* code() const { return m_data->code; }
 	uint64_t codeSize() const { return m_data->codeSize; }
@@ -151,7 +148,7 @@ public:
 
 public:
 	RuntimeData* m_data = nullptr;	///< Pointer to data. Expected by compiled contract.
-	Env* m_env = nullptr;			///< Pointer to environment proxy. Expected by compiled contract.
+	evm_env* m_env = nullptr;		///< Pointer to environment proxy. Expected by compiled contract.
 	byte* m_memData = nullptr;
 	uint64_t m_memSize = 0;
 	uint64_t m_memCap = 0;
