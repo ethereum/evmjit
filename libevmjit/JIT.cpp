@@ -38,9 +38,8 @@ std::string makeCodeId(evm_hash256 codeHash, evm_mode mode)
 	str.reserve(sizeof(codeHash) * 2 + 1);
 	for (auto b: codeHash.bytes)
 	{
-		// FIXME: Change evm_hash256.bytes to uint8_t[32].
-		str.push_back(hexChars[static_cast<uint8_t>(b) & 0xf]);
-		str.push_back(hexChars[static_cast<uint8_t>(b) >> 4]);
+		str.push_back(hexChars[b & 0xf]);
+		str.push_back(hexChars[b >> 4]);
 	}
 	str.push_back(mode == EVM_FRONTIER ? 'F' : 'H');
 	return str;
