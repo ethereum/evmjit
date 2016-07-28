@@ -282,8 +282,7 @@ EVMJIT_API evm_result evm_execute(evm_instance* instance, evm_env* env,
 	rt.callDataSize = input_size;
 	std::memcpy(&rt.apparentValue, &value, sizeof(value));
 
-	// FIXME: Use evm_env* instead of Env*
-	ExecutionContext ctx{rt, reinterpret_cast<Env*>(env)};
+	ExecutionContext ctx{rt, env};
 
 	evm_result result;
 	result.gas_left = EVM_EXCEPTION;
