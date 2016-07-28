@@ -121,15 +121,20 @@ class SymbolResolver : public llvm::SectionMemoryManager
 {
 	llvm::RuntimeDyld::SymbolInfo findSymbol(std::string const& _name) override
 	{
-		// FIXME: Use string switch here.
-		if (_name == "env_sha3")
-			return {reinterpret_cast<uint64_t>(&keccak), llvm::JITSymbolFlags::Exported};
-		else if (_name == "evm.query")
-			return {reinterpret_cast<uint64_t>(JITImpl::instance().queryFn), llvm::JITSymbolFlags::Exported};
-		else if (_name == "evm.update")
-			return {reinterpret_cast<uint64_t>(JITImpl::instance().updateFn), llvm::JITSymbolFlags::Exported};
-		else if (_name == "evm.call")
-			return {reinterpret_cast<uint64_t>(JITImpl::instance().callFn), llvm::JITSymbolFlags::Exported};
+		auto& jit = JITImpl::instance();
+		auto addr = llvm::StringSwitch<uint64_t>(_name)
+			.Case("env_sha3", reinterpret_cast<uint64_t>(&keccak))
+			.Case("evm.query", reinterpret_cast<uint64_t>(jit.queryFn))
+			.Case("evm.update", reinterpret_cast<uint64_t>(jit.updateFn))
+			.Case("evm.call", reinterpret_cast<uint64_t>(jit.callFn))
+			.Default(0);
+		if (addr)
+			return {addr, llvm::JITSymbolFlags::Exported};
+
+		// Fallback to default implementation that would search for the symbol
+		// in the current process.
+		// TODO: In the future we should control the whole set of requested
+		//       symbols (like memcpy, memset, etc) to improve performance.
 		return llvm::SectionMemoryManager::findSymbol(_name);
 	}
 };
