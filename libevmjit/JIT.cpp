@@ -115,7 +115,6 @@ public:
 	evm_query_fn queryFn = nullptr;
 	evm_update_fn updateFn = nullptr;
 	evm_call_fn callFn = nullptr;
-	bool hasDelegateCall = false;
 };
 
 
@@ -264,9 +263,10 @@ EVMJIT_API void evm_destroy(evm_instance* instance)
 }
 
 EVMJIT_API evm_result evm_execute(evm_instance* instance, evm_env* env,
-                       evm_hash256 code_hash, uint8_t const* code,
-                       size_t code_size, int64_t gas, uint8_t const* input,
-                       size_t input_size, evm_uint256 value)
+                                  evm_mode mode, evm_hash256 code_hash,
+                                  uint8_t const* code, size_t code_size,
+                                  int64_t gas, uint8_t const* input,
+                                  size_t input_size, evm_uint256 value)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
 
@@ -287,7 +287,6 @@ EVMJIT_API evm_result evm_execute(evm_instance* instance, evm_env* env,
 	result.output_size = 0;
 	result.internal_memory = nullptr;
 
-	auto mode = jit.hasDelegateCall ? EVM_HOMESTEAD : EVM_FRONTIER;
 	auto codeIdentifier = makeCodeId(code_hash, mode);
 	auto execFunc = jit.getExecFunc(codeIdentifier);
 	if (!execFunc)
@@ -327,10 +326,8 @@ EVMJIT_API bool evm_set_option(evm_instance* instance,
                                char const* name,
                                char const* value)
 {
-	auto& jit = *reinterpret_cast<JITImpl*>(instance);
-	if (std::string{"delegatecall"} == name)
-		jit.hasDelegateCall = (std::string{"true"} == value);
-	return true;
+	(void)instance, (void)name, (void)value;
+	return false;
 }
 
 EVMJIT_API bool evmjit_is_code_ready(evm_instance* instance, evm_mode mode,
