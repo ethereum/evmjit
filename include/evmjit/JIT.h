@@ -87,7 +87,7 @@ struct RuntimeData
 
 struct JITSchedule
 {
-	// Move to constexpr once all our target compilers support it.
+	// TODO: Move to constexpr once all our target compilers support it.
 	typedef std::integral_constant<uint64_t, 1024> stackLimit;
 	typedef std::integral_constant<uint64_t, 0> stepGas0;
 	typedef std::integral_constant<uint64_t, 2> stepGas1;
@@ -112,6 +112,7 @@ struct JITSchedule
 	typedef std::integral_constant<uint64_t, 40> callGas;
 	typedef std::integral_constant<uint64_t, 3> memoryGas;
 	typedef std::integral_constant<uint64_t, 3> copyGas;
+	typedef std::integral_constant<uint64_t, 9000> valueTransferGas;
 };
 
 /// VM Environment (ExtVM) opaque type

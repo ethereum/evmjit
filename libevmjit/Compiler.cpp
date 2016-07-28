@@ -783,8 +783,8 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			auto callGas = stack.pop();
 			auto address = stack.pop();
 			auto value = (kind == EVM_DELEGATECALL) ?
-							 llvm::UndefValue::get(Type::Word) :
-							 stack.pop();
+			             llvm::UndefValue::get(Type::Word) :
+			             stack.pop();
 			auto inOff = stack.pop();
 			auto inSize = stack.pop();
 			auto outOff = stack.pop();
@@ -799,7 +799,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 
 			auto transfer = m_builder.CreateICmpNE(value, Constant::get(0));
 			auto transferCost = m_builder.CreateSelect(
-				transfer, m_builder.getInt64(9000), m_builder.getInt64(0));
+				transfer, m_builder.getInt64(JITSchedule::valueTransferGas::value), m_builder.getInt64(0));
 			_gasMeter.count(transferCost, _runtimeManager.getJmpBuf(),
 							_runtimeManager.getGasPtr());
 			_gasMeter.count(callGas, _runtimeManager.getJmpBuf(),
