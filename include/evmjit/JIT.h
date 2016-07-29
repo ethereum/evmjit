@@ -5,18 +5,18 @@
 #include <functional>
 #include <type_traits>
 
-#include <evm.h>
-
 #ifdef _MSC_VER
 #ifdef evmjit_EXPORTS
-	#define EVMJIT_API __declspec(dllexport)
+#define EXPORT __declspec(dllexport)
 #else
-	#define EVMJIT_API __declspec(dllimport)
+#define EXPORT __declspec(dllimport)
 #endif
 
 #else
-#define EVMJIT_API [[gnu::visibility("default")]]
+#define EXPORT [[gnu::visibility("default")]]
 #endif
+
+#include <evm.h>  // Uses EXPORT macro
 
 #if _MSC_VER && _MSC_VER < 1900
 #define _ALLOW_KEYWORD_MACROS

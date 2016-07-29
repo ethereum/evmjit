@@ -1,7 +1,5 @@
 #include "Ext.h"
 
-#include <evm.h>
-
 #include "preprocessor/llvm_includes_start.h"
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/Module.h>
