@@ -249,7 +249,7 @@ bytes_ref ExecutionContext::getReturnData() const
 extern "C"
 {
 
-EVMJIT_API evm_instance* evm_create(evm_query_fn queryFn, evm_update_fn updateFn,
+EXPORT evm_instance* evm_create(evm_query_fn queryFn, evm_update_fn updateFn,
 									evm_call_fn callFn)
 {
 	// Let's always return the same instance. It's a bit of faking, but actually
@@ -261,12 +261,12 @@ EVMJIT_API evm_instance* evm_create(evm_query_fn queryFn, evm_update_fn updateFn
 	return reinterpret_cast<evm_instance*>(&jit);
 }
 
-EVMJIT_API void evm_destroy(evm_instance* instance)
+EXPORT void evm_destroy(evm_instance* instance)
 {
 	assert(instance == static_cast<void*>(&JITImpl::instance()));
 }
 
-EVMJIT_API evm_result evm_execute(evm_instance* instance, evm_env* env,
+EXPORT evm_result evm_execute(evm_instance* instance, evm_env* env,
                                   evm_mode mode, evm_hash256 code_hash,
                                   uint8_t const* code, size_t code_size,
                                   int64_t gas, uint8_t const* input,
@@ -319,13 +319,13 @@ EVMJIT_API evm_result evm_execute(evm_instance* instance, evm_env* env,
 	return result;
 }
 
-EVMJIT_API void evm_destroy_result(evm_result result)
+EXPORT void evm_destroy_result(evm_result result)
 {
 	if (result.internal_memory)
 		ext_free(result.internal_memory);  // FIXME: Check what is ext_free about.
 }
 
-EVMJIT_API bool evm_set_option(evm_instance* instance,
+EXPORT bool evm_set_option(evm_instance* instance,
                                char const* name,
                                char const* value)
 {
@@ -333,7 +333,7 @@ EVMJIT_API bool evm_set_option(evm_instance* instance,
 	return false;
 }
 
-EVMJIT_API bool evmjit_is_code_ready(evm_instance* instance, evm_mode mode,
+EXPORT bool evmjit_is_code_ready(evm_instance* instance, evm_mode mode,
                                      evm_hash256 code_hash)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
@@ -341,7 +341,7 @@ EVMJIT_API bool evmjit_is_code_ready(evm_instance* instance, evm_mode mode,
 	return jit.getExecFunc(codeIdentifier) != nullptr;
 }
 
-EVMJIT_API void evmjit_compile(evm_instance* instance, evm_mode mode,
+EXPORT void evmjit_compile(evm_instance* instance, evm_mode mode,
                                unsigned char const* code, size_t code_size,
                                evm_hash256 code_hash)
 {

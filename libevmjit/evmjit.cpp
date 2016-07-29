@@ -1,4 +1,3 @@
-#include "evm.h"
 #include "evmjit/JIT.h"
 
 static_assert(sizeof(evm_uint256) == 32, "evm_uint256 is too big");
@@ -21,7 +20,7 @@ static_assert(alignof(evm_hash256) == 8, "");
 extern "C"
 {
 
-EVMJIT_API char const* evm_get_info(enum evm_info_key key)
+EXPORT char const* evm_get_info(evm_info_key key)
 {
     switch (key)
     {
