@@ -220,7 +220,7 @@ llvm::Value* Ext::createCABICall(llvm::Function* _func, std::initializer_list<ll
 llvm::Value* Ext::sload(llvm::Value* _index)
 {
 	auto func = getQueryFunc(getModule());
-	return createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_STORAGE), _index});
+	return createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_SLOAD), _index});
 }
 
 void Ext::sstore(llvm::Value* _index, llvm::Value* _value)
