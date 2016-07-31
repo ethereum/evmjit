@@ -192,7 +192,8 @@ void JITImpl::mapExecFunc(std::string const& _codeIdentifier, ExecFunc _funcAddr
 	m_codeMap.emplace(_codeIdentifier, _funcAddr);
 }
 
-ExecFunc JITImpl::compile(evm_mode _mode, byte const* _code, uint64_t _codeSize, std::string const& _codeIdentifier)
+ExecFunc JITImpl::compile(evm_mode _mode, byte const* _code, uint64_t _codeSize,
+	std::string const& _codeIdentifier)
 {
 	auto module = Cache::getObject(_codeIdentifier, getLLVMContext());
 	if (!module)
@@ -250,7 +251,7 @@ extern "C"
 {
 
 EXPORT evm_instance* evm_create(evm_query_fn queryFn, evm_update_fn updateFn,
-									evm_call_fn callFn)
+	evm_call_fn callFn)
 {
 	// Let's always return the same instance. It's a bit of faking, but actually
 	// this might be a compliant implementation.
@@ -267,10 +268,8 @@ EXPORT void evm_destroy(evm_instance* instance)
 }
 
 EXPORT evm_result evm_execute(evm_instance* instance, evm_env* env,
-                                  evm_mode mode, evm_hash256 code_hash,
-                                  uint8_t const* code, size_t code_size,
-                                  int64_t gas, uint8_t const* input,
-                                  size_t input_size, evm_uint256 value)
+	evm_mode mode, evm_hash256 code_hash, uint8_t const* code, size_t code_size,
+	int64_t gas, uint8_t const* input, size_t input_size, evm_uint256 value)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
 
@@ -325,16 +324,15 @@ EXPORT void evm_destroy_result(evm_result result)
 		ext_free(result.internal_memory);  // FIXME: Check what is ext_free about.
 }
 
-EXPORT bool evm_set_option(evm_instance* instance,
-                               char const* name,
-                               char const* value)
+EXPORT bool evm_set_option(evm_instance* instance, char const* name,
+	char const* value)
 {
 	(void)instance, (void)name, (void)value;
 	return false;
 }
 
 EXPORT bool evmjit_is_code_ready(evm_instance* instance, evm_mode mode,
-                                     evm_hash256 code_hash)
+	evm_hash256 code_hash)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
 	auto codeIdentifier = makeCodeId(code_hash, mode);
@@ -342,8 +340,7 @@ EXPORT bool evmjit_is_code_ready(evm_instance* instance, evm_mode mode,
 }
 
 EXPORT void evmjit_compile(evm_instance* instance, evm_mode mode,
-                               unsigned char const* code, size_t code_size,
-                               evm_hash256 code_hash)
+	unsigned char const* code, size_t code_size, evm_hash256 code_hash)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
 	auto codeIdentifier = makeCodeId(code_hash, mode);
