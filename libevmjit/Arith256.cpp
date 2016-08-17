@@ -564,7 +564,7 @@ llvm::Value* Arith256::exp(llvm::Value* _arg1, llvm::Value* _arg2)
 
 extern "C"
 {
-	EVMJIT_API void debug(uint64_t a, uint64_t b, uint64_t c, uint64_t d, char z)
+	EXPORT void debug(uint64_t a, uint64_t b, uint64_t c, uint64_t d, char z)
 	{
 		DLOG(JIT) << "DEBUG " << std::dec << z << ": " //<< d << c << b << a
 				<< " ["	<< std::hex << std::setfill('0') << std::setw(16) << d << std::setw(16) << c << std::setw(16) << b << std::setw(16) << a << "]\n";

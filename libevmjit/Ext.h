@@ -1,8 +1,8 @@
 #pragma once
 
 #include <array>
-#include <evm.h>
 
+#include "evmjit/JIT.h"
 #include "CompilerHelper.h"
 
 namespace dev

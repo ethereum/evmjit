@@ -1,13 +1,10 @@
 #pragma once
 
+#include "evmjit/JIT.h"
 #include "BasicBlock.h"
 
 namespace dev
 {
-namespace evmjit
-{
-struct JITSchedule;
-}
 namespace eth
 {
 namespace jit
@@ -26,7 +23,7 @@ public:
 		bool dumpCFG = false;
 	};
 
-	Compiler(Options const& _options, JITSchedule const& _schedule);
+	Compiler(Options const& _options, evm_mode _mode, llvm::LLVMContext& _llvmContext);
 
 	std::unique_ptr<llvm::Module> compile(code_iterator _begin, code_iterator _end, std::string const& _id);
 
@@ -41,7 +38,8 @@ private:
 	/// Compiler options
 	Options const& m_options;
 
-	JITSchedule const& m_schedule;
+	/// EVM compatibility mode.
+	evm_mode m_mode;
 
 	/// Helper class for generating IR
 	IRBuilder m_builder;

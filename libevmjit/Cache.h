@@ -5,6 +5,7 @@
 
 #include "preprocessor/llvm_includes_start.h"
 #include <llvm/ExecutionEngine/ObjectCache.h>
+#include <llvm/IR/LLVMContext.h>
 #include "preprocessor/llvm_includes_end.h"
 
 namespace llvm
@@ -46,13 +47,14 @@ class Cache
 {
 public:
 	static ObjectCache* init(CacheMode _mode, JITListener* _listener);
-	static std::unique_ptr<llvm::Module> getObject(std::string const& id);
+	static std::unique_ptr<llvm::Module> getObject(std::string const& id, llvm::LLVMContext& _llvmContext);
 
 	/// Clears cache storage
 	static void clear();
 
 	/// Loads all available cached objects to ExecutionEngine
-	static void preload(llvm::ExecutionEngine& _ee, std::unordered_map<std::string, uint64_t>& _funcCache);
+	static void preload(llvm::ExecutionEngine& _ee, std::unordered_map<std::string, uint64_t>& _funcCache,
+						llvm::LLVMContext& _llvmContext);
 };
 
 }

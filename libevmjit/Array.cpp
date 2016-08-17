@@ -263,12 +263,12 @@ void Array::extend(llvm::Value* _arrayPtr, llvm::Value* _size)
 
 extern "C"
 {
-	EVMJIT_API void* ext_realloc(void* _data, size_t _size) noexcept
+	EXPORT void* ext_realloc(void* _data, size_t _size) noexcept
 	{
 		return std::realloc(_data, _size);
 	}
 
-	EVMJIT_API void ext_free(void* _data) noexcept
+	EXPORT void ext_free(void* _data) noexcept
 	{
 		std::free(_data);
 	}
