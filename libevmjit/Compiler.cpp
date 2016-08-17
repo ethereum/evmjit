@@ -30,10 +30,10 @@ namespace jit
 
 static const auto c_destIdxLabel = "destIdx";
 
-Compiler::Compiler(Options const& _options, JITSchedule const& _schedule):
+Compiler::Compiler(Options const& _options, evm_mode _mode, llvm::LLVMContext& _llvmContext):
 	m_options(_options),
-	m_schedule(_schedule),
-	m_builder(llvm::getGlobalContext())
+	m_mode(_mode),
+	m_builder(_llvmContext)
 {
 	Type::init(m_builder.getContext());
 }
@@ -174,7 +174,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(code_iterator _begin, code_itera
 
 	// Init runtime structures.
 	RuntimeManager runtimeManager(m_builder, _begin, _end);
-	GasMeter gasMeter(m_builder, runtimeManager, m_schedule);
+	GasMeter gasMeter(m_builder, runtimeManager);
 	Memory memory(runtimeManager, gasMeter);
 	Ext ext(runtimeManager, memory);
 	Arith256 arith(m_builder);
@@ -765,9 +765,9 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 		}
 
 		case Instruction::DELEGATECALL:
-			if (!m_schedule.haveDelegateCall)
+			if (m_mode == EVM_FRONTIER)
 			{
-				// invalid opcode
+				// Invalid opcode in Frontier compatibility mode.
 				_runtimeManager.exit(ReturnCode::OutOfGas);
 				it = _basicBlock.end() - 1;  // finish block compilation
 				break;
@@ -783,8 +783,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			auto callGas = stack.pop();
 			auto address = stack.pop();
 			auto value = (kind == EVM_DELEGATECALL) ?
-							 llvm::UndefValue::get(Type::Word) :
-							 stack.pop();
+						 llvm::UndefValue::get(Type::Word) : stack.pop();
 			auto inOff = stack.pop();
 			auto inSize = stack.pop();
 			auto outOff = stack.pop();
@@ -799,7 +798,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 
 			auto transfer = m_builder.CreateICmpNE(value, Constant::get(0));
 			auto transferCost = m_builder.CreateSelect(
-				transfer, m_builder.getInt64(9000), m_builder.getInt64(0));
+				transfer, m_builder.getInt64(JITSchedule::valueTransferGas::value), m_builder.getInt64(0));
 			_gasMeter.count(transferCost, _runtimeManager.getJmpBuf(),
 							_runtimeManager.getGasPtr());
 			_gasMeter.count(callGas, _runtimeManager.getJmpBuf(),
