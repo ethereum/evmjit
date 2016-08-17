@@ -4,6 +4,7 @@
 
 #include "preprocessor/llvm_includes_start.h"
 #include <llvm/IR/Module.h>
+#include <llvm/ADT/StringSwitch.h>
 #include <llvm/ADT/Triple.h>
 #include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
