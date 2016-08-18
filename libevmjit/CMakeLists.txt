@@ -22,7 +22,6 @@ set(SOURCES
 	RuntimeManager.cpp	RuntimeManager.h
 	Type.cpp			Type.h
 	Utils.cpp			Utils.h
-	support/Path.cpp	support/Path.h
 )
 source_group("" FILES ${SOURCES})
 
