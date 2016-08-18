@@ -12,7 +12,6 @@
 #include <llvm/Support/raw_os_ostream.h>
 #include "preprocessor/llvm_includes_end.h"
 
-#include "support/Path.h"
 #include "ExecStats.h"
 #include "Utils.h"
 
@@ -36,9 +35,9 @@ namespace
 
 	std::string getVersionedCacheDir()
 	{
-		llvm::SmallString<256> path{path::user_cache_directory()};
-		llvm::sys::path::append(path, "ethereum", "evmjit",
-								std::to_string(c_internalABIVersion));
+		llvm::SmallString<256> path;
+		llvm::sys::path::user_cache_directory(path, "ethereum", "evmjit",
+		                                      std::to_string(c_internalABIVersion));
 		return path.str();
 	}
 
