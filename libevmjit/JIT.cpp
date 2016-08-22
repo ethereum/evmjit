@@ -319,10 +319,10 @@ EXPORT evm_result evm_execute(evm_instance* instance, evm_env* env,
 	return result;
 }
 
-EXPORT void evm_destroy_result(evm_result result)
+EXPORT void evm_release_result_resources(evm_result const* result)
 {
-	if (result.internal_memory)
-		ext_free(result.internal_memory);  // FIXME: Check what is ext_free about.
+	if (result->internal_memory)
+		ext_free(result->internal_memory);  // FIXME: Check what is ext_free about.
 }
 
 EXPORT bool evm_set_option(evm_instance* instance, char const* name,
