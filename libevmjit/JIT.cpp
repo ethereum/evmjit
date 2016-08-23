@@ -319,10 +319,10 @@ EXPORT evm_result evm_execute(evm_instance* instance, evm_env* env,
 	return result;
 }
 
-EXPORT void evm_destroy_result(evm_result result)
+EXPORT void evm_release_result(evm_result const* result)
 {
-	if (result.internal_memory)
-		ext_free(result.internal_memory);  // FIXME: Check what is ext_free about.
+	if (result->internal_memory)
+		ext_free(result->internal_memory);  // FIXME: Check what is ext_free about.
 }
 
 EXPORT bool evm_set_option(evm_instance* instance, char const* name,
@@ -332,15 +332,18 @@ EXPORT bool evm_set_option(evm_instance* instance, char const* name,
 	return false;
 }
 
-EXPORT bool evmjit_is_code_ready(evm_instance* instance, evm_mode mode,
-	evm_hash256 code_hash)
+EXPORT evm_code_status evm_get_code_status(evm_instance* instance,
+	evm_mode mode, evm_hash256 code_hash)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
 	auto codeIdentifier = makeCodeId(code_hash, mode);
-	return jit.getExecFunc(codeIdentifier) != nullptr;
+	if (jit.getExecFunc(codeIdentifier) != nullptr)
+		return EVM_READY;
+	// TODO: Add support for EVM_CACHED.
+	return EVM_UNKNOWN;
 }
 
-EXPORT void evmjit_compile(evm_instance* instance, evm_mode mode,
+EXPORT void evm_prepare_code(evm_instance* instance, evm_mode mode,
 	unsigned char const* code, size_t code_size, evm_hash256 code_hash)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
