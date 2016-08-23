@@ -265,6 +265,7 @@ static evm_instance* create(evm_query_fn queryFn, evm_update_fn updateFn,
 
 static void destroy(evm_instance* instance)
 {
+    (void)instance;
 	assert(instance == static_cast<void*>(&JITImpl::instance()));
 }
 
