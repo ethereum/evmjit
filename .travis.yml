@@ -22,10 +22,7 @@ cache:
 before_install:
   - cmake --version
 
-script:
-  - mkdir -p build
-  - (cd build; cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE ..)
-  - cmake --build build
+script: scripts/build.sh
 
 deploy:
   provider: script
