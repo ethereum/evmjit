@@ -251,7 +251,7 @@ bytes_ref ExecutionContext::getReturnData() const
 extern "C"
 {
 
-EXPORT evm_instance* evm_create(evm_query_fn queryFn, evm_update_fn updateFn,
+static evm_instance* create(evm_query_fn queryFn, evm_update_fn updateFn,
 	evm_call_fn callFn)
 {
 	// Let's always return the same instance. It's a bit of faking, but actually
@@ -263,12 +263,12 @@ EXPORT evm_instance* evm_create(evm_query_fn queryFn, evm_update_fn updateFn,
 	return reinterpret_cast<evm_instance*>(&jit);
 }
 
-EXPORT void evm_destroy(evm_instance* instance)
+static void destroy(evm_instance* instance)
 {
 	assert(instance == static_cast<void*>(&JITImpl::instance()));
 }
 
-EXPORT evm_result evm_execute(evm_instance* instance, evm_env* env,
+static evm_result execute(evm_instance* instance, evm_env* env,
 	evm_mode mode, evm_hash256 code_hash, uint8_t const* code, size_t code_size,
 	int64_t gas, uint8_t const* input, size_t input_size, evm_uint256 value)
 {
@@ -319,20 +319,20 @@ EXPORT evm_result evm_execute(evm_instance* instance, evm_env* env,
 	return result;
 }
 
-EXPORT void evm_release_result(evm_result const* result)
+static void release_result(evm_result const* result)
 {
 	if (result->internal_memory)
 		ext_free(result->internal_memory);  // FIXME: Check what is ext_free about.
 }
 
-EXPORT int evm_set_option(evm_instance* instance, char const* name,
+static int set_option(evm_instance* instance, char const* name,
 	char const* value)
 {
 	(void)instance, (void)name, (void)value;
 	return 0;
 }
 
-EXPORT evm_code_status evm_get_code_status(evm_instance* instance,
+static evm_code_status get_code_status(evm_instance* instance,
 	evm_mode mode, evm_hash256 code_hash)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
@@ -343,7 +343,7 @@ EXPORT evm_code_status evm_get_code_status(evm_instance* instance,
 	return EVM_UNKNOWN;
 }
 
-EXPORT void evm_prepare_code(evm_instance* instance, evm_mode mode,
+static void prepare_code(evm_instance* instance, evm_mode mode,
 	unsigned char const* code, size_t code_size, evm_hash256 code_hash)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
@@ -351,6 +351,11 @@ EXPORT void evm_prepare_code(evm_instance* instance, evm_mode mode,
 	auto execFunc = jit.compile(mode, code, code_size, codeIdentifier);
 	if (execFunc) // FIXME: What with error?
 		jit.mapExecFunc(codeIdentifier, execFunc);
+}
+
+EXPORT evm_fn_table evmjit_get_fn_table()
+{
+	return {create, destroy, execute, release_result, get_code_status, prepare_code, set_option};
 }
 
 }  // extern "C"
