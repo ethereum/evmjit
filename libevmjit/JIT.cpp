@@ -286,7 +286,8 @@ static evm_result execute(evm_instance* instance, evm_env* env,
 	ExecutionContext ctx{rt, env};
 
 	evm_result result;
-	result.gas_left = EVM_EXCEPTION;
+	result.outcome = EVM_RESULT_EXCEPTION;
+	result.gas_left = 0;
 	result.output_data = nullptr;
 	result.output_size = 0;
 	result.internal_memory = nullptr;
@@ -303,14 +304,23 @@ static evm_result execute(evm_instance* instance, evm_env* env,
 
 	auto returnCode = execFunc(&ctx);
 
-	if (returnCode != ReturnCode::OutOfGas)
-		result.gas_left = rt.gas;
-
-	if (returnCode == ReturnCode::Return)
+	switch (returnCode)
 	{
-		auto out = ctx.getReturnData();
-		result.output_data = std::get<0>(out);
-		result.output_size = std::get<1>(out);
+		case ReturnCode::Return:
+		{
+			auto out = ctx.getReturnData();
+			result.output_data = std::get<0>(out);
+			result.output_size = std::get<1>(out);
+		}
+		case ReturnCode::Stop:
+			result.gas_left = rt.gas;
+			result.outcome = EVM_RESULT_SUCCESS;
+			break;
+		case ReturnCode:OutOfGas:
+			result.outcome = EVM_RESULT_OUT_OF_GAS;
+			break;
+		default:
+			break;
 	}
 
 	// Take care of the internal memory.
