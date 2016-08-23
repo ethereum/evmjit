@@ -1,5 +1,3 @@
-set(TARGET_NAME evmjit)
-
 get_filename_component(EVMJIT_INCLUDE_DIR ../include ABSOLUTE)
 
 set(SOURCES
@@ -43,14 +41,14 @@ endif()
 string(COMPARE EQUAL "${LLVM_ENABLE_ASSERTIONS}" "ON" LLVM_DEBUG)
 configure_file(BuildInfo.h.in ${CMAKE_CURRENT_BINARY_DIR}/gen/BuildInfo.gen.h)
 
-add_library(${TARGET_NAME} SHARED ${SOURCES} gen/BuildInfo.gen.h)
-set_target_properties(${TARGET_NAME} PROPERTIES
-						VERSION ${EVMJIT_VERSION} SOVERSION ${EVMJIT_SOVERSION}
-						FOLDER "libs")
+add_library(evmjit SHARED ${SOURCES} gen/BuildInfo.gen.h)
+set_target_properties(evmjit PROPERTIES
+		VERSION ${EVMJIT_VERSION} SOVERSION ${EVMJIT_SOVERSION}
+		FOLDER "libs")
 
-target_include_directories(${TARGET_NAME} PUBLIC ${EVMJIT_INCLUDE_DIR})
-target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/gen)
-target_link_libraries(${TARGET_NAME} PRIVATE llvm)
+target_include_directories(evmjit PUBLIC ${EVMJIT_INCLUDE_DIR})
+target_include_directories(evmjit PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/gen)
+target_link_libraries(evmjit PRIVATE llvm)
 
-install(TARGETS ${TARGET_NAME} LIBRARY DESTINATION lib ARCHIVE DESTINATION lib RUNTIME DESTINATION bin)
+install(TARGETS evmjit LIBRARY DESTINATION lib ARCHIVE DESTINATION lib RUNTIME DESTINATION bin)
 install(DIRECTORY ${EVMJIT_INCLUDE_DIR} DESTINATION include)
