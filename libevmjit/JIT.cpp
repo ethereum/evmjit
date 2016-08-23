@@ -325,11 +325,11 @@ EXPORT void evm_release_result(evm_result const* result)
 		ext_free(result->internal_memory);  // FIXME: Check what is ext_free about.
 }
 
-EXPORT bool evm_set_option(evm_instance* instance, char const* name,
+EXPORT int evm_set_option(evm_instance* instance, char const* name,
 	char const* value)
 {
 	(void)instance, (void)name, (void)value;
-	return false;
+	return 0;
 }
 
 EXPORT evm_code_status evm_get_code_status(evm_instance* instance,
