@@ -354,7 +354,7 @@ static void prepare_code(evm_instance* instance, evm_mode mode,
 		jit.mapExecFunc(codeIdentifier, execFunc);
 }
 
-EXPORT evm_fn_table evmjit_get_fn_table()
+EXPORT evm_interface evmjit_get_interface()
 {
 	return {create, destroy, execute, release_result, get_code_status, prepare_code, set_option};
 }
