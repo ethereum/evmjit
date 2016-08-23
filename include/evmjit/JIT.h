@@ -5,23 +5,7 @@
 #include <functional>
 #include <type_traits>
 
-#ifdef _MSC_VER
-#ifdef evmjit_EXPORTS
-#define EXPORT __declspec(dllexport)
-#else
-#define EXPORT __declspec(dllimport)
-#endif
-
-#else
-#define EXPORT [[gnu::visibility("default")]]
-#endif
-
-#include <evm.h>  // Uses EXPORT macro
-
-#if _MSC_VER && _MSC_VER < 1900
-#define _ALLOW_KEYWORD_MACROS
-#define noexcept throw()
-#endif
+#include <evmjit.h>
 
 namespace dev
 {
