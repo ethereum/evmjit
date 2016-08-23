@@ -18,10 +18,10 @@
 extern "C" {
 #endif
 
-/// Get EVMJIT's function table for EVM-C interface.
+/// Get EVMJIT's EVM-C interface.
 ///
 /// @return  EVMJIT's function table.
-EXPORT struct evm_fn_table evmjit_get_fn_table();
+EXPORT struct evm_interface evmjit_get_interface();
 
 #if __cplusplus
 }
