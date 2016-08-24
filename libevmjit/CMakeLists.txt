@@ -41,13 +41,18 @@ endif()
 string(COMPARE EQUAL "${LLVM_ENABLE_ASSERTIONS}" "ON" LLVM_DEBUG)
 configure_file(BuildInfo.h.in ${CMAKE_CURRENT_BINARY_DIR}/gen/BuildInfo.gen.h)
 
-add_library(evmjit SHARED ${SOURCES} gen/BuildInfo.gen.h)
+add_library(evmjit-objs OBJECT ${SOURCES} gen/BuildInfo.gen.h)
+target_include_directories(evmjit-objs PUBLIC ${EVMJIT_INCLUDE_DIR})
+target_include_directories(evmjit-objs PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/gen)
+set_target_properties(evmjit-objs PROPERTIES POSITION_INDEPENDENT_CODE On)
+
+add_library(evmjit-static STATIC $<TARGET_OBJECTS:evmjit-objs>)
+target_link_libraries(evmjit-static PRIVATE llvm)
+
+add_library(evmjit SHARED $<TARGET_OBJECTS:evmjit-objs>)
 set_target_properties(evmjit PROPERTIES
 		VERSION ${EVMJIT_VERSION} SOVERSION ${EVMJIT_SOVERSION}
 		FOLDER "libs")
-
-target_include_directories(evmjit PUBLIC ${EVMJIT_INCLUDE_DIR})
-target_include_directories(evmjit PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/gen)
 target_link_libraries(evmjit PRIVATE llvm)
 
 install(TARGETS evmjit LIBRARY DESTINATION lib ARCHIVE DESTINATION lib RUNTIME DESTINATION bin)
