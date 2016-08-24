@@ -286,7 +286,7 @@ static evm_result execute(evm_instance* instance, evm_env* env,
 	ExecutionContext ctx{rt, env};
 
 	evm_result result;
-	result.outcome = EVM_RESULT_EXCEPTION;
+	result.outcome = EVM_EXCEPTION;
 	result.gas_left = 0;
 	result.output_data = nullptr;
 	result.output_size = 0;
@@ -314,10 +314,10 @@ static evm_result execute(evm_instance* instance, evm_env* env,
 		}
 		case ReturnCode::Stop:
 			result.gas_left = rt.gas;
-			result.outcome = EVM_RESULT_SUCCESS;
+			result.outcome = EVM_SUCCESS;
 			break;
 		case ReturnCode:OutOfGas:
-			result.outcome = EVM_RESULT_OUT_OF_GAS;
+			result.outcome = EVM_OUT_OF_GAS;
 			break;
 		default:
 			break;
