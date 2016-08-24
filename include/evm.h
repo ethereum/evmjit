@@ -59,12 +59,32 @@ struct evm_hash256 {
     };
 };
 
-
-#define EVM_EXCEPTION INT64_MIN  ///< The execution ended with an exception.
+/// The outcome of an execution.
+enum evm_result_outcome {
+    EVM_SUCCESS = 1,
+    EVM_OUT_OF_GAS = 2,
+    EVM_BAD_INSTRUCTION = 3,
+    EVM_BAD_JUMP_DESTINATION = 4,
+    EVM_STACK_OVERFLOW = 5,
+    EVM_STACK_UNDERFLOW = 6,
+    EVM_EXCEPTION = 7
+};
 
 /// Complex struct representing execution result.
 struct evm_result {
-    /// Gas left after execution or exception indicator.
+    /// The outcome of the execution.
+    enum evm_result_outcome outcome;
+
+    /// Optional reason why the execution didn't succeed.
+    /// @see outcome.
+    const char *outcome_reason;
+
+    /// The last program counter position
+    /// It can be optionally present when certain conditions are hit.
+    /// @see outcome.
+    int32_t last_pc;
+
+    /// Gas left after execution.
     int64_t gas_left;
 
     /// Rerefence to output data. The memory containing the output data
@@ -204,6 +224,9 @@ enum evm_call_kind {
     EVM_CALLCODE = 2,     ///< Request CALLCODE.
     EVM_CREATE = 3        ///< Request CREATE. Semantic of some params changes.
 };
+
+/// This is used as a result code with evm_call_fn.
+#define EVM_CALL_FAILURE INT64_MIN  ///< The execution ended with a failure.
 
 /// Pointer to the callback function supporting EVM calls.
 ///
