@@ -4,8 +4,7 @@ dependencies:
     - sudo apt -q update
     - sudo apt -qy install cmake
   override:
-    - mkdir -p build && cd build && cmake ..
-    - cmake --build build
+    - BUILD_TYPE=RelWithDebInfo scripts/build.sh
   cache_directories:
     # TODO: add ccache
     - build/llvm  # Cache llvm build
