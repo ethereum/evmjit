@@ -1,5 +1,7 @@
 #pragma once
 
+#include <evm.h>
+
 #ifdef _MSC_VER
 #ifdef evmjit_EXPORTS
 #define EXPORT __declspec(dllexport)
@@ -10,9 +12,6 @@
 #else
 #define EXPORT [[gnu::visibility("default")]]
 #endif
-
-// FIXME: evm.h uses EXPORT temporary.
-#include <evm.h>
 
 #if __cplusplus
 extern "C" {
