@@ -749,7 +749,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			auto ret =
 				m_builder.CreateICmpSGE(r, m_builder.getInt64(0), "create.ret");
 			auto rmagic = m_builder.CreateSelect(
-				ret, m_builder.getInt64(0), m_builder.getInt64(EVM_EXCEPTION),
+				ret, m_builder.getInt64(0), m_builder.getInt64(EVM_CALL_FAILURE),
 				"call.rmagic");
 			// TODO: optimize
 			auto finalCost = m_builder.CreateSub(r, rmagic, "create.finalcost");
@@ -811,7 +811,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			auto ret =
 				m_builder.CreateICmpSGE(r, m_builder.getInt64(0), "call.ret");
 			auto rmagic = m_builder.CreateSelect(
-				ret, m_builder.getInt64(0), m_builder.getInt64(EVM_EXCEPTION),
+				ret, m_builder.getInt64(0), m_builder.getInt64(EVM_CALL_FAILURE),
 				"call.rmagic");
 			// TODO: optimize
 			auto finalCost = m_builder.CreateSub(r, rmagic, "call.finalcost");
