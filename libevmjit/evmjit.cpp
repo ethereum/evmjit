@@ -3,7 +3,7 @@
 static_assert(sizeof(evm_uint256) == 32, "evm_uint256 is too big");
 static_assert(sizeof(evm_hash256) == 32, "evm_hash256 is too big");
 static_assert(sizeof(evm_hash160) == 20, "evm_hash160 is too big");
-static_assert(sizeof(evm_result) == 32, "evm_result is too big");
+static_assert(sizeof(evm_result) <= 64, "evm_result does not fit cache line");
 
 // Check enums match int size.
 // On GCC/clang the underlying type should be unsigned int, on MSVC int
