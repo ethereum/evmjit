@@ -286,7 +286,7 @@ static evm_result execute(evm_instance* instance, evm_env* env,
 	ExecutionContext ctx{rt, env};
 
 	evm_result result;
-	result.error_code = EVM_SUCCESS;
+	result.code = EVM_SUCCESS;
 	result.gas_left = 0;
 	result.output_data = nullptr;
 	result.output_size = 0;
@@ -308,7 +308,7 @@ static evm_result execute(evm_instance* instance, evm_env* env,
 	{
 		// EVMJIT does not provide information what exactly type of failure
 		// it was, so use generic EVM_FAILURE.
-		result.error_code = EVM_FAILURE;
+		result.code = EVM_FAILURE;
 	}
 	else
 	{
