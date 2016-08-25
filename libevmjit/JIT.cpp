@@ -286,7 +286,8 @@ static evm_result execute(evm_instance* instance, evm_env* env,
 	ExecutionContext ctx{rt, env};
 
 	evm_result result;
-	result.gas_left = EVM_EXCEPTION;
+	result.code = EVM_SUCCESS;
+	result.gas_left = 0;
 	result.output_data = nullptr;
 	result.output_size = 0;
 	result.internal_memory = nullptr;
@@ -303,8 +304,17 @@ static evm_result execute(evm_instance* instance, evm_env* env,
 
 	auto returnCode = execFunc(&ctx);
 
-	if (returnCode != ReturnCode::OutOfGas)
+	if (returnCode == ReturnCode::OutOfGas)
+	{
+		// EVMJIT does not provide information what exactly type of failure
+		// it was, so use generic EVM_FAILURE.
+		result.code = EVM_FAILURE;
+	}
+	else
+	{
+		// In case of success return the amount of gas left.
 		result.gas_left = rt.gas;
+	}
 
 	if (returnCode == ReturnCode::Return)
 	{
