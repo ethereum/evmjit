@@ -366,7 +366,8 @@ static void prepare_code(evm_instance* instance, evm_mode mode,
 
 EXPORT evm_interface evmjit_get_interface()
 {
-	return {create, destroy, execute, release_result, get_code_status, prepare_code, set_option};
+	return {EVM_ABI_VERSION, create, destroy, execute, release_result,
+			get_code_status, prepare_code, set_option};
 }
 
 }  // extern "C"
