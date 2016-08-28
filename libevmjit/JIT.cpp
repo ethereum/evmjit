@@ -355,7 +355,7 @@ static evm_code_status get_code_status(evm_instance* instance,
 }
 
 static void prepare_code(evm_instance* instance, evm_mode mode,
-	unsigned char const* code, size_t code_size, evm_hash256 code_hash)
+	evm_hash256 code_hash, unsigned char const* code, size_t code_size)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
 	auto codeIdentifier = makeCodeId(code_hash, mode);
