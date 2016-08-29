@@ -84,7 +84,6 @@ function(get_link_libraries OUTPUT_LIST TARGET)
 	else()
 		get_target_property(LIBS ${TARGET} LINK_LIBRARIES)
 	endif()
-	message("## LIBS: ${LIBS}")
 	set(LIB_FILES "")
 	foreach(LIB ${LIBS})
 		if (TARGET ${LIB})
@@ -107,12 +106,20 @@ endfunction()
 
 
 get_link_libraries(EVMJIT_LINK_LIBRARIES evmjit)
-
-if (CMAKE_AR)
+set(EVMJIT_STANDALONE_FILE ${CMAKE_STATIC_LIBRARY_PREFIX}evmjit-standalone${CMAKE_STATIC_LIBRARY_SUFFIX})
+if (MSVC)
+	add_library(evmjit-standalone STATIC EXCLUDE_FROM_ALL $<TARGET_OBJECTS:evmjit-objs>)
+	string(REPLACE ";" " " FLAGS "${EVMJIT_LINK_LIBRARIES}")
+	set_target_properties(evmjit-standalone PROPERTIES STATIC_LIBRARY_FLAGS "${FLAGS}")
+elseif (APPLE)
+	add_custom_command(OUTPUT ${EVMJIT_STANDALONE_FILE}
+					   COMMAND libtool -static -o ${EVMJIT_STANDALONE_FILE} $<TARGET_FILE:evmjit-static> ${EVMJIT_LINK_LIBRARIES}
+					   VERBATIM)
+	add_custom_target(evmjit-standalone DEPENDS ${EVMJIT_STANDALONE_FILE})
+elseif (CMAKE_AR)
 	# For platforms using ar a linker scripts is created and used to create
 	# the standalone library.
 
-	set(EVMJIT_STANDALONE_FILE ${CMAKE_STATIC_LIBRARY_PREFIX}evmjit-standalone${CMAKE_STATIC_LIBRARY_SUFFIX})
 	string(REPLACE ";" "\\naddlib " AR_SCRIPT ";${EVMJIT_LINK_LIBRARIES}")
 	set(AR_SCRIPT "create ${EVMJIT_STANDALONE_FILE}\\naddlib $<TARGET_FILE:evmjit-static>${AR_SCRIPT}\\nsave\\nend\\n")
 	set(AR_SCRIPT_FILE ${CMAKE_STATIC_LIBRARY_PREFIX}evmjit-standalone.ar-script)
@@ -120,6 +127,7 @@ if (CMAKE_AR)
 	# Generate the linker script.
 	add_custom_command(OUTPUT ${AR_SCRIPT_FILE}
 			COMMAND printf ${AR_SCRIPT} > ${AR_SCRIPT_FILE}
+			DEPENDS $<TARGET_FILE:evmjit-static>
 			VERBATIM)
 
 	# Execute the script.
@@ -129,7 +137,6 @@ if (CMAKE_AR)
 			VERBATIM)
 
 	add_custom_target(evmjit-standalone DEPENDS ${EVMJIT_STANDALONE_FILE})
-	add_dependencies(evmjit-standalone evmjit-static)
 
 	# The "thin" library is also provided. It is smaller that the standalone one
 	# but cannot be redistributed.
@@ -139,8 +146,4 @@ if (CMAKE_AR)
 			COMMAND ${CMAKE_AR} cTq ${EVMJIT_STANDALONE_THIN_FILE} $<TARGET_FILE:evmjit-static> ${EVMJIT_LINK_LIBRARIES})
 
 	add_custom_target(evmjit-standalone-thin ALL DEPENDS ${EVMJIT_STANDALONE_THIN_FILE})
-elseif (MSVC)
-	add_library(evmjit-standalone STATIC EXCLUDE_FROM_ALL $<TARGET_OBJECTS:evmjit-objs>)
-	string(REPLACE ";" " " FLAGS "${EVMJIT_LINK_LIBRARIES}")
-	set_target_properties(evmjit-standalone PROPERTIES STATIC_LIBRARY_FLAGS "${FLAGS}")
 endif()
