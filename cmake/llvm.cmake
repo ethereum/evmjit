@@ -32,7 +32,7 @@ function(configure_llvm_project TARGET_NAME)
     else()
         # List of required LLVM libs.
         # Generated with `llvm-config --libs mcjit ipo x86codegen`
-        # Only used here locally to setup the "llvm-libs" imported target
+        # Only used here locally to setup the "llvm" imported target
         set(LIBS
             LLVMMCJIT
             LLVMX86CodeGen LLVMX86Desc LLVMX86Info LLVMMCDisassembler LLVMX86AsmPrinter
@@ -52,6 +52,12 @@ function(configure_llvm_project TARGET_NAME)
             set(SYSTEM_LIBS pthread dl)
         endif()
 
+        if (${CMAKE_GENERATOR} STREQUAL "Unix Makefiles")
+            set(BUILD_COMMAND $(MAKE))
+        else()
+            set(BUILD_COMMAND cmake --build <BINARY_DIR> --config Release)
+        endif()
+
         include(ExternalProject)
         ExternalProject_Add(llvm-project
             PREFIX llvm
@@ -66,7 +72,7 @@ function(configure_llvm_project TARGET_NAME)
                        -DLLVM_TARGETS_TO_BUILD=X86
                        -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF
                        -DLLVM_INCLUDE_TESTS=OFF
-            BUILD_COMMAND   cmake --build <BINARY_DIR> --config Release
+            BUILD_COMMAND   ${BUILD_COMMAND}
             INSTALL_COMMAND cmake --build <BINARY_DIR> --config Release --target install
             EXCLUDE_FROM_ALL TRUE
         )
@@ -97,7 +103,7 @@ function(configure_llvm_project TARGET_NAME)
     set_property(TARGET ${TARGET_NAME} PROPERTY INTERFACE_COMPILE_DEFINITIONS ${DEFINES})
     set_property(TARGET ${TARGET_NAME} PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${LLVM_INCLUDE_DIRS})
     set_property(TARGET ${TARGET_NAME} PROPERTY IMPORTED_LOCATION ${MAIN_LIB})
-    set_property(TARGET ${TARGET_NAME} PROPERTY IMPORTED_LINK_INTERFACE_LIBRARIES ${LIBS})
+    set_property(TARGET ${TARGET_NAME} PROPERTY INTERFACE_LINK_LIBRARIES ${LIBS})
     if (TARGET llvm-project)
         add_dependencies(${TARGET_NAME} llvm-project)
     endif()
