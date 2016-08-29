@@ -41,19 +41,106 @@ endif()
 string(COMPARE EQUAL "${LLVM_ENABLE_ASSERTIONS}" "ON" LLVM_DEBUG)
 configure_file(BuildInfo.h.in ${CMAKE_CURRENT_BINARY_DIR}/gen/BuildInfo.gen.h)
 
+# "Object" library to allow building both static and shared libraries.
 add_library(evmjit-objs OBJECT ${SOURCES} gen/BuildInfo.gen.h)
-target_include_directories(evmjit-objs PUBLIC ${EVMJIT_INCLUDE_DIR})
-target_include_directories(evmjit-objs PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/gen)
+# Explicit dependency on llvm to download LLVM header files.
+add_dependencies(evmjit-objs llvm)
+# PIC is required by shared libraries. We want it in the static library as well,
+# because it is going to be used to create e.g. Python modules (shared libraries).
 set_target_properties(evmjit-objs PROPERTIES POSITION_INDEPENDENT_CODE On)
+target_compile_definitions(evmjit-objs PRIVATE evmjit_EXPORTS)
+get_target_property(LLVM_COMPILE_DEFINITIONS llvm INTERFACE_COMPILE_DEFINITIONS)
+if (LLVM_COMPILE_DEFINITIONS)
+	target_compile_definitions(evmjit-objs PRIVATE ${LLVM_COMPILE_DEFINITIONS})
+endif()
+get_target_property(LLVM_INCLUDE_DIRECTORIES llvm INTERFACE_INCLUDE_DIRECTORIES)
+target_include_directories(evmjit-objs SYSTEM PRIVATE ${LLVM_INCLUDE_DIRECTORIES})
+target_include_directories(evmjit-objs PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/gen)
+target_include_directories(evmjit-objs PUBLIC ${EVMJIT_INCLUDE_DIR})
 
+# Static library.
 add_library(evmjit-static STATIC $<TARGET_OBJECTS:evmjit-objs>)
 target_link_libraries(evmjit-static PRIVATE llvm)
 
+# Shared library.
 add_library(evmjit SHARED $<TARGET_OBJECTS:evmjit-objs>)
 set_target_properties(evmjit PROPERTIES
-		VERSION ${EVMJIT_VERSION} SOVERSION ${EVMJIT_SOVERSION}
-		FOLDER "libs")
+					  VERSION ${EVMJIT_VERSION}
+					  SOVERSION ${EVMJIT_SOVERSION}
+					  FOLDER "libs")
 target_link_libraries(evmjit PRIVATE llvm)
 
-install(TARGETS evmjit LIBRARY DESTINATION lib ARCHIVE DESTINATION lib RUNTIME DESTINATION bin)
-install(DIRECTORY ${EVMJIT_INCLUDE_DIR} DESTINATION include)
+# This section configures evmjit-standalone -- a static library containing
+# evmjit and all its static dependencies.
+
+# This function tries to get a list of all static library dependencies of
+# a target. It probably does not handle all cases to be generic, but works for
+# LLVM case.
+function(get_link_libraries OUTPUT_LIST TARGET)
+	get_target_property(IMPORTED ${TARGET} IMPORTED)
+	list(APPEND VISITED_TARGETS ${TARGET})
+	if (IMPORTED)
+		get_target_property(LIBS ${TARGET} INTERFACE_LINK_LIBRARIES)
+	else()
+		get_target_property(LIBS ${TARGET} LINK_LIBRARIES)
+	endif()
+	message("## LIBS: ${LIBS}")
+	set(LIB_FILES "")
+	foreach(LIB ${LIBS})
+		if (TARGET ${LIB})
+			list(FIND VISITED_TARGETS ${LIB} VISITED)
+			if (${VISITED} EQUAL -1)
+				get_target_property(LIB_FILE ${LIB} LOCATION)
+				get_link_libraries(LINK_LIB_FILES ${LIB})
+				list(APPEND LIB_FILES ${LIB_FILE} ${LINK_LIB_FILES})
+			endif()
+		elseif (EXISTS ${LIB})
+			# Here LIB is a full path to a (hopefuly static) library. We don't
+			# want system libs (usually dynamic) here.
+			list(APPEND LIB_FILES ${LIB})
+		endif()
+	endforeach()
+	set(VISITED_TARGETS ${VISITED_TARGETS} PARENT_SCOPE)
+	list(REMOVE_DUPLICATES LIB_FILES)
+	set(${OUTPUT_LIST} ${LIB_FILES} PARENT_SCOPE)
+endfunction()
+
+
+get_link_libraries(EVMJIT_LINK_LIBRARIES evmjit)
+
+if (CMAKE_AR)
+	# For platforms using ar a linker scripts is created and used to create
+	# the standalone library.
+
+	set(EVMJIT_STANDALONE_FILE ${CMAKE_STATIC_LIBRARY_PREFIX}evmjit-standalone${CMAKE_STATIC_LIBRARY_SUFFIX})
+	string(REPLACE ";" "\\naddlib " AR_SCRIPT ";${EVMJIT_LINK_LIBRARIES}")
+	set(AR_SCRIPT "create ${EVMJIT_STANDALONE_FILE}\\naddlib $<TARGET_FILE:evmjit-static>${AR_SCRIPT}\\nsave\\nend\\n")
+	set(AR_SCRIPT_FILE ${CMAKE_STATIC_LIBRARY_PREFIX}evmjit-standalone.ar-script)
+
+	# Generate the linker script.
+	add_custom_command(OUTPUT ${AR_SCRIPT_FILE}
+			COMMAND printf ${AR_SCRIPT} > ${AR_SCRIPT_FILE}
+			VERBATIM)
+
+	# Execute the script.
+	add_custom_command(OUTPUT ${EVMJIT_STANDALONE_FILE}
+			COMMAND ${CMAKE_AR} -M < ${AR_SCRIPT_FILE}
+			MAIN_DEPENDENCY ${AR_SCRIPT_FILE}
+			VERBATIM)
+
+	add_custom_target(evmjit-standalone DEPENDS ${EVMJIT_STANDALONE_FILE})
+	add_dependencies(evmjit-standalone evmjit-static)
+
+	# The "thin" library is also provided. It is smaller that the standalone one
+	# but cannot be redistributed.
+	set(EVMJIT_STANDALONE_THIN_FILE ${CMAKE_STATIC_LIBRARY_PREFIX}evmjit-standalone-thin${CMAKE_STATIC_LIBRARY_SUFFIX})
+
+	add_custom_command(OUTPUT ${EVMJIT_STANDALONE_THIN_FILE}
+			COMMAND ${CMAKE_AR} cTq ${EVMJIT_STANDALONE_THIN_FILE} $<TARGET_FILE:evmjit-static> ${EVMJIT_LINK_LIBRARIES})
+
+	add_custom_target(evmjit-standalone-thin ALL DEPENDS ${EVMJIT_STANDALONE_THIN_FILE})
+elseif (MSVC)
+	add_library(evmjit-standalone STATIC EXCLUDE_FROM_ALL $<TARGET_OBJECTS:evmjit-objs>)
+	string(REPLACE ";" " " FLAGS "${EVMJIT_LINK_LIBRARIES}")
+	set_target_properties(evmjit-standalone PROPERTIES STATIC_LIBRARY_FLAGS "${FLAGS}")
+endif()
