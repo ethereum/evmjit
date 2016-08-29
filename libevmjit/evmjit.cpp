@@ -11,7 +11,3 @@ static_assert(sizeof(evm_query_key)  == sizeof(int), "Enum `evm_query_key` is no
 static_assert(sizeof(evm_update_key) == sizeof(int), "Enum `evm_update_key` is not the size of int");
 static_assert(sizeof(evm_call_kind)  == sizeof(int), "Enum `evm_call_kind` is not the size of int");
 static_assert(sizeof(evm_mode)       == sizeof(int), "Enum `evm_mode` is not the size of int");
-
-#ifndef _MSC_VER  // alignof is broken on MSVC in static_assert context.
-static_assert(alignof(evm_hash256) == 8, "");
-#endif
