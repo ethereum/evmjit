@@ -2,7 +2,7 @@
 
 #include <array>
 
-#include "evmjit/JIT.h"
+#include "JIT.h"
 #include "CompilerHelper.h"
 
 namespace dev

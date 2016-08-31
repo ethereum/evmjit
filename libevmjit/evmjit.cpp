@@ -1,4 +1,4 @@
-#include "evmjit/JIT.h"
+#include "JIT.h"
 
 static_assert(sizeof(evm_uint256be) == 32, "evm_uint256be is too big");
 static_assert(sizeof(evm_uint160be) == 20, "evm_uint160be is too big");
