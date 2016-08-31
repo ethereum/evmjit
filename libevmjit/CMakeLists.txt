@@ -1,7 +1,7 @@
 get_filename_component(EVMJIT_INCLUDE_DIR ../include ABSOLUTE)
 
 set(SOURCES
-	evmjit.cpp			${EVMJIT_INCLUDE_DIR}/evm.h
+	${EVMJIT_INCLUDE_DIR}/evm.h
 	JIT.cpp				JIT.h
 	Arith256.cpp		Arith256.h
 	Array.cpp			Array.h
