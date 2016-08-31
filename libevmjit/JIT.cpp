@@ -32,7 +32,7 @@ namespace
 using ExecFunc = ReturnCode(*)(ExecutionContext*);
 
 /// Combine code hash and compatibility mode into a printable code identifier.
-std::string makeCodeId(evm_hash256 codeHash, evm_mode mode)
+std::string makeCodeId(evm_uint256be codeHash, evm_mode mode)
 {
 	static const auto hexChars = "0123456789abcdef";
 	std::string str;
@@ -269,9 +269,9 @@ static void destroy(evm_instance* instance)
 	assert(instance == static_cast<void*>(&JITImpl::instance()));
 }
 
-static evm_result execute(evm_instance* instance, evm_env* env,
-	evm_mode mode, evm_hash256 code_hash, uint8_t const* code, size_t code_size,
-	int64_t gas, uint8_t const* input, size_t input_size, evm_uint256 value)
+static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
+	evm_uint256be code_hash, uint8_t const* code, size_t code_size,
+	int64_t gas, uint8_t const* input, size_t input_size, evm_uint256be value)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
 
@@ -344,7 +344,7 @@ static int set_option(evm_instance* instance, char const* name,
 }
 
 static evm_code_status get_code_status(evm_instance* instance,
-	evm_mode mode, evm_hash256 code_hash)
+	evm_mode mode, evm_uint256be code_hash)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
 	auto codeIdentifier = makeCodeId(code_hash, mode);
@@ -355,7 +355,7 @@ static evm_code_status get_code_status(evm_instance* instance,
 }
 
 static void prepare_code(evm_instance* instance, evm_mode mode,
-	evm_hash256 code_hash, unsigned char const* code, size_t code_size)
+	evm_uint256be code_hash, unsigned char const* code, size_t code_size)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
 	auto codeIdentifier = makeCodeId(code_hash, mode);
