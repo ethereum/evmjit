@@ -4,7 +4,7 @@
 #include <llvm/IR/IntrinsicInst.h>
 #include "preprocessor/llvm_includes_end.h"
 
-#include <evmjit/JIT.h>
+#include "JIT.h"
 #include "Ext.h"
 #include "RuntimeManager.h"
 
