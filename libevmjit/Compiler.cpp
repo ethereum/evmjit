@@ -652,8 +652,11 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			break;
 
 		case Instruction::CALLVALUE:
-			stack.push(_runtimeManager.getValue());
+		{
+			auto beValue = _runtimeManager.getValue();
+			stack.push(Endianness::toNative(m_builder, beValue));
 			break;
+		}
 
 		case Instruction::CODESIZE:
 			stack.push(_runtimeManager.getCodeSize());
