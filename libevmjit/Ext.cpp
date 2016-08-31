@@ -217,14 +217,18 @@ llvm::Value* Ext::createCABICall(llvm::Function* _func, std::initializer_list<ll
 
 llvm::Value* Ext::sload(llvm::Value* _index)
 {
+	auto index = Endianness::toBE(m_builder, _index);
 	auto func = getQueryFunc(getModule());
-	return createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_SLOAD), _index});
+	auto value = createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_SLOAD), index});
+	return Endianness::toNative(m_builder, value);
 }
 
 void Ext::sstore(llvm::Value* _index, llvm::Value* _value)
 {
+	auto index = Endianness::toBE(m_builder, _index);
+	auto value = Endianness::toBE(m_builder, _value);
 	auto func = getUpdateFunc(getModule());
-	createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_SSTORE), _index, _value});
+	createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_SSTORE), index, value});
 }
 
 void Ext::selfdestruct(llvm::Value* _beneficiary)
@@ -266,6 +270,10 @@ llvm::Value* Ext::query(evm_query_key _key)
 
 	switch (_key)
 	{
+	case EVM_GAS_PRICE:
+	case EVM_DIFFICULTY:
+		v = Endianness::toNative(m_builder, v);
+		break;
 	case EVM_ADDRESS:
 	case EVM_CALLER:
 	case EVM_ORIGIN:
@@ -298,7 +306,8 @@ llvm::Value* Ext::balance(llvm::Value* _address)
 {
 	auto func = getQueryFunc(getModule());
 	auto address = Endianness::toBE(m_builder, _address);
-	return createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_BALANCE), address});
+	auto v = createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_BALANCE), address});
+	return Endianness::toNative(m_builder, v);
 }
 
 llvm::Value* Ext::blockHash(llvm::Value* _number)
@@ -317,8 +326,7 @@ llvm::Value* Ext::sha3(llvm::Value* _inOff, llvm::Value* _inSize)
 	auto ret = getArgAlloca();
 	createCall(EnvFunc::sha3, {begin, size, ret});
 	llvm::Value* hash = m_builder.CreateLoad(ret);
-	hash = Endianness::toNative(m_builder, hash);
-	return hash;
+	return Endianness::toNative(m_builder, hash);
 }
 
 MemoryRef Ext::extcode(llvm::Value* _addr)
@@ -393,7 +401,7 @@ llvm::Value* Ext::call(evm_call_kind _kind,
 	auto outSize = m_builder.CreateTrunc(_outSize, Type::Size);
 
 	auto value = getArgAlloca();
-	m_builder.CreateStore(_value, value);
+	m_builder.CreateStore(Endianness::toBE(m_builder, _value), value);
 
 	auto func = getCallFunc(getModule());
 	return createCABICall(
@@ -408,7 +416,7 @@ std::tuple<llvm::Value*, llvm::Value*> Ext::create(llvm::Value* _endowment,
 	auto addrTy = m_builder.getIntNTy(160);
 	auto gas = getRuntimeManager().getGas();
 	auto value = getArgAlloca();
-	m_builder.CreateStore(_endowment, value);
+	m_builder.CreateStore(Endianness::toBE(m_builder, _endowment), value);
 	auto inData = m_memoryMan.getBytePtr(_initOff);
 	auto inSize = m_builder.CreateTrunc(_initSize, Type::Size);
 	auto pAddr =
