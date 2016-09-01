@@ -1,6 +1,6 @@
 #pragma once
 
-#include "evmjit/JIT.h"
+#include "JIT.h"
 #include "BasicBlock.h"
 
 namespace dev
