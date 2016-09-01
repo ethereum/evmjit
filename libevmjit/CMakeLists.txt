@@ -1,8 +1,8 @@
 get_filename_component(EVMJIT_INCLUDE_DIR ../include ABSOLUTE)
 
 set(SOURCES
-	evmjit.cpp			${EVMJIT_INCLUDE_DIR}/evm.h
-	JIT.cpp				${EVMJIT_INCLUDE_DIR}/evmjit/JIT.h
+	${EVMJIT_INCLUDE_DIR}/evm.h
+	JIT.cpp				JIT.h
 	Arith256.cpp		Arith256.h
 	Array.cpp			Array.h
 	BasicBlock.cpp		BasicBlock.h
@@ -70,6 +70,14 @@ set_target_properties(evmjit PROPERTIES
 					  FOLDER "libs")
 target_link_libraries(evmjit PRIVATE llvm)
 
+include(GNUInstallDirs)
+install(TARGETS evmjit
+		RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+		LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+		ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(DIRECTORY ${EVMJIT_INCLUDE_DIR}/
+		DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
 # This section configures evmjit-standalone -- a static library containing
 # evmjit and all its static dependencies.
 
@@ -111,11 +119,16 @@ if (MSVC)
 	add_library(evmjit-standalone STATIC EXCLUDE_FROM_ALL $<TARGET_OBJECTS:evmjit-objs>)
 	string(REPLACE ";" " " FLAGS "${EVMJIT_LINK_LIBRARIES}")
 	set_target_properties(evmjit-standalone PROPERTIES STATIC_LIBRARY_FLAGS "${FLAGS}")
+	install(TARGETS evmjit-standalone
+			RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+			LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+			ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 elseif (APPLE)
 	add_custom_command(OUTPUT ${EVMJIT_STANDALONE_FILE}
 					   COMMAND libtool -static -o ${EVMJIT_STANDALONE_FILE} $<TARGET_FILE:evmjit-static> ${EVMJIT_LINK_LIBRARIES}
 					   VERBATIM)
 	add_custom_target(evmjit-standalone DEPENDS ${EVMJIT_STANDALONE_FILE})
+	install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${EVMJIT_STANDALONE_FILE} DESTINATION ${CMAKE_INSTALL_LIBDIR} OPTIONAL)
 elseif (CMAKE_AR)
 	# For platforms using ar a linker scripts is created and used to create
 	# the standalone library.
@@ -146,4 +159,6 @@ elseif (CMAKE_AR)
 			COMMAND ${CMAKE_AR} cTq ${EVMJIT_STANDALONE_THIN_FILE} $<TARGET_FILE:evmjit-static> ${EVMJIT_LINK_LIBRARIES})
 
 	add_custom_target(evmjit-standalone-thin ALL DEPENDS ${EVMJIT_STANDALONE_THIN_FILE})
+	# FIXME: Looks it will be better to create evmjit-standalone as a library with costum steps instead of custom taget.
+	install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${EVMJIT_STANDALONE_FILE} DESTINATION ${CMAKE_INSTALL_LIBDIR} OPTIONAL)
 endif()

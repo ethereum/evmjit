@@ -6,7 +6,7 @@
 #include <llvm/IR/Metadata.h>
 #include "preprocessor/llvm_includes_end.h"
 
-#include "evmjit/JIT.h" // ReturnCode
+#include "JIT.h"
 
 namespace dev
 {
