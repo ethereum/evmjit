@@ -10,7 +10,7 @@
 #endif
 
 #else
-#define EXPORT [[gnu::visibility("default")]]
+#define EXPORT __attribute__ ((visibility ("default")))
 #endif
 
 #if __cplusplus
@@ -20,7 +20,7 @@ extern "C" {
 /// Get EVMJIT's EVM-C interface.
 ///
 /// @return  EVMJIT's function table.
-EXPORT struct evm_interface evmjit_get_interface();
+EXPORT struct evm_interface evmjit_get_interface(void);
 
 #if __cplusplus
 }
