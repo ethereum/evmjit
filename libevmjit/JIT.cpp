@@ -237,12 +237,10 @@ ExecFunc JITImpl::compile(evm_mode _mode, byte const* _code, uint64_t _codeSize,
 } // anonymous namespace
 
 
-extern "C" void ext_free(void* _data) noexcept;
-
 ExecutionContext::~ExecutionContext() noexcept
 {
 	if (m_memData)
-		ext_free(m_memData); // Use helper free to check memory leaks
+		std::free(m_memData); // Use helper free to check memory leaks
 }
 
 bytes_ref ExecutionContext::getReturnData() const
@@ -346,7 +344,7 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 static void release_result(evm_result const* result)
 {
 	if (result->internal_memory)
-		ext_free(result->internal_memory);  // FIXME: Check what is ext_free about.
+		std::free(result->internal_memory);
 }
 
 static int set_option(evm_instance* instance, char const* name,
