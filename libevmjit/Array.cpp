@@ -153,7 +153,7 @@ llvm::Function* Array::createFreeFunc()
 	func->setDoesNotThrow();
 	func->setDoesNotCapture(1);
 
-	auto freeFunc = llvm::Function::Create(llvm::FunctionType::get(Type::Void, Type::BytePtr, false), llvm::Function::ExternalLinkage, "ext_free", getModule());
+	auto freeFunc = llvm::Function::Create(llvm::FunctionType::get(Type::Void, Type::BytePtr, false), llvm::Function::ExternalLinkage, "free", getModule());
 	freeFunc->setDoesNotThrow();
 	freeFunc->setDoesNotCapture(1);
 
@@ -172,11 +172,11 @@ llvm::Function* Array::createFreeFunc()
 
 llvm::Function* Array::getReallocFunc()
 {
-	if (auto func = getModule()->getFunction("ext_realloc"))
+	if (auto func = getModule()->getFunction("realloc"))
 		return func;
 
 	llvm::Type* reallocArgTypes[] = {Type::BytePtr, Type::Size};
-	auto reallocFunc = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, reallocArgTypes, false), llvm::Function::ExternalLinkage, "ext_realloc", getModule());
+	auto reallocFunc = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, reallocArgTypes, false), llvm::Function::ExternalLinkage, "realloc", getModule());
 	reallocFunc->setDoesNotThrow();
 	reallocFunc->setDoesNotAlias(0);
 	reallocFunc->setDoesNotCapture(1);
@@ -259,17 +259,4 @@ void Array::extend(llvm::Value* _arrayPtr, llvm::Value* _size)
 
 }
 }
-}
-
-extern "C"
-{
-	EXPORT void* ext_realloc(void* _data, size_t _size) noexcept
-	{
-		return std::realloc(_data, _size);
-	}
-
-	EXPORT void ext_free(void* _data) noexcept
-	{
-		std::free(_data);
-	}
 }
