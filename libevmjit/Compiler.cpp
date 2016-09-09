@@ -666,7 +666,13 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 		case Instruction::BLOCKHASH:
 		{
 			auto number = stack.pop();
+			// If number bigger than int64 assume the result is 0.
+			auto limitC = m_builder.getInt64(std::numeric_limits<int64_t>::max());
+			auto limit = m_builder.CreateZExt(limitC, Type::Word);
+			auto isBigNumber = m_builder.CreateICmpUGT(number, limit);
 			auto hash = _ext.blockHash(number);
+			// TODO: Try to eliminate the call if the number is invalid.
+			hash = m_builder.CreateSelect(isBigNumber, Constant::get(0), hash);
 			stack.push(hash);
 			break;
 		}
