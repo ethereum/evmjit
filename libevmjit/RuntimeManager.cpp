@@ -26,16 +26,7 @@ llvm::StructType* RuntimeManager::getRuntimeDataType()
 			Type::Size,		// gasPrice
 			Type::BytePtr,	// callData
 			Type::Size,		// callDataSize
-			Type::Word,		// address
-			Type::Word,		// caller
-			Type::Word,		// origin
-			Type::Word,		// transferredValue
 			Type::Word,		// apparentValue
-			Type::Word,		// coinBase
-			Type::Word,		// difficulty
-			Type::Word,		// gasLimit
-			Type::Size,		// blockNumber
-			Type::Size,		// blockTimestamp
 			Type::BytePtr,	// code
 			Type::Size,		// codeSize
 		};
@@ -71,16 +62,7 @@ llvm::Twine getName(RuntimeData::Index _index)
 	case RuntimeData::GasPrice:		return "tx.gasprice";
 	case RuntimeData::CallData:		return "msg.data.ptr";
 	case RuntimeData::CallDataSize:	return "msg.data.size";
-	case RuntimeData::Address:		return "this.address";
-	case RuntimeData::Caller:		return "msg.caller";
-	case RuntimeData::Origin:		return "tx.origin";
-	case RuntimeData::TransferredCallValue:	return "msg.valuetxed";
 	case RuntimeData::ApparentCallValue:	return "msg.value";
-	case RuntimeData::CoinBase:		return "block.coinbase";
-	case RuntimeData::Difficulty:	return "block.difficulty";
-	case RuntimeData::GasLimit:		return "block.gaslimit";
-	case RuntimeData::Number:		return "block.number";
-	case RuntimeData::Timestamp:	return "block.timestamp";
 	case RuntimeData::Code:			return "code.ptr";
 	case RuntimeData::CodeSize:		return "code.size";
 	}
