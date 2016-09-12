@@ -346,8 +346,15 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			auto base = stack.pop();
 			auto exponent = stack.pop();
 			_gasMeter.countExp(exponent);
+			// Optimize case where base is 2 -- replace with shift.
+			auto pow2 = m_builder.CreateICmpEQ(base, Constant::get(2));
+			auto bigShift = m_builder.CreateICmpUGE(exponent, Constant::get(256));
+			auto shiftRet = m_builder.CreateShl(Constant::get(1), exponent);
+			auto ret2 = m_builder.CreateSelect(bigShift, Constant::get(0), shiftRet);
+
 			auto ret = _arith.exp(base, exponent);
-			stack.push(ret);
+			auto selectRet = m_builder.CreateSelect(pow2, ret2, ret);
+			stack.push(selectRet);
 			break;
 		}
 
