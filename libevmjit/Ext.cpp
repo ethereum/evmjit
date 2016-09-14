@@ -310,6 +310,14 @@ llvm::Value* Ext::balance(llvm::Value* _address)
 	return Endianness::toNative(m_builder, v);
 }
 
+llvm::Value* Ext::exists(llvm::Value* _address)
+{
+	auto func = getQueryFunc(getModule());
+	auto address = Endianness::toBE(m_builder, _address);
+	auto v = createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_ACCOUNT_EXISTS), address});
+	return m_builder.CreateTrunc(v, m_builder.getInt1Ty());
+}
+
 llvm::Value* Ext::blockHash(llvm::Value* _number)
 {
 	auto func = getQueryFunc(getModule());

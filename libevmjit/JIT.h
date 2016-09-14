@@ -79,6 +79,8 @@ struct JITSchedule
 	typedef std::integral_constant<uint64_t, 3> memoryGas;
 	typedef std::integral_constant<uint64_t, 3> copyGas;
 	typedef std::integral_constant<uint64_t, 9000> valueTransferGas;
+	typedef std::integral_constant<uint64_t, 2300> callStipend;
+	typedef std::integral_constant<uint64_t, 25000> callNewAccount;
 };
 
 enum class ReturnCode
