@@ -50,6 +50,7 @@ public:
 
 	llvm::Value* query(evm_query_key _key);
 	llvm::Value* balance(llvm::Value* _address);
+	llvm::Value* exists(llvm::Value* _address);
 	llvm::Value* calldataload(llvm::Value* _index);
 	std::tuple<llvm::Value*, llvm::Value*> create(llvm::Value* _endowment, llvm::Value* _initOff, llvm::Value* _initSize);
 	llvm::Value* blockHash(llvm::Value* _number);
