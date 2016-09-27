@@ -141,6 +141,78 @@ llvm::Function* getCallFunc(llvm::Module* _module)
 		func->addAttribute(6, llvm::Attribute::ReadOnly);
 		func->addAttribute(6, llvm::Attribute::NoCapture);
 		func->addAttribute(8, llvm::Attribute::NoCapture);
+		auto callFunc = func;
+
+		// Create a call wrapper to handle additional checks.
+		func = llvm::Function::Create(fty, llvm::Function::PrivateLinkage, "call", _module);
+		func->addAttribute(4, llvm::Attribute::ByVal);
+		func->addAttribute(4, llvm::Attribute::ReadOnly);
+		func->addAttribute(4, llvm::Attribute::NoAlias);
+		func->addAttribute(4, llvm::Attribute::NoCapture);
+		if (!onWindows)
+			func->addAttribute(5, llvm::Attribute::ByVal);
+		func->addAttribute(5, llvm::Attribute::ReadOnly);
+		func->addAttribute(5, llvm::Attribute::NoAlias);
+		func->addAttribute(5, llvm::Attribute::NoCapture);
+		func->addAttribute(6, llvm::Attribute::ReadOnly);
+		func->addAttribute(6, llvm::Attribute::NoCapture);
+		func->addAttribute(8, llvm::Attribute::NoCapture);
+
+		auto iter = func->arg_begin();
+		auto& env = *iter;
+		std::advance(iter, 1);
+		auto& callKind = *iter;
+		std::advance(iter, 1);
+		auto& gas = *iter;
+		std::advance(iter, 2);
+		auto& valuePtr = *iter;
+
+		auto& ctx = _module->getContext();
+		llvm::IRBuilder<> builder(ctx);
+		auto entryBB = llvm::BasicBlock::Create(ctx, "Entry", func);
+		auto checkTransferBB = llvm::BasicBlock::Create(ctx, "CheckTransfer", func);
+		auto checkBalanceBB = llvm::BasicBlock::Create(ctx, "CheckBalance", func);
+		auto callBB = llvm::BasicBlock::Create(ctx, "Call", func);
+		auto failBB = llvm::BasicBlock::Create(ctx, "Fail", func);
+
+		builder.SetInsertPoint(entryBB);
+		auto v = builder.CreateAlloca(Type::Word);
+		auto addr = builder.CreateAlloca(Type::Word);
+		auto queryFn = getQueryFunc(_module);
+		auto undef = llvm::UndefValue::get(Type::WordPtr);
+		builder.CreateCall(queryFn, {v, &env, builder.getInt32(EVM_CALL_DEPTH), undef});
+		auto depthPtr = builder.CreateBitCast(v, builder.getInt64Ty()->getPointerTo());
+		auto depth = builder.CreateLoad(depthPtr);
+		auto depthOk = builder.CreateICmpSLT(depth, builder.getInt64(1024));
+		builder.CreateCondBr(depthOk, checkTransferBB, failBB);
+
+		builder.SetInsertPoint(checkTransferBB);
+		auto notDelegateCall = builder.CreateICmpNE(&callKind, builder.getInt32(EVM_DELEGATECALL));
+		llvm::Value* value = builder.CreateLoad(&valuePtr);
+		auto valueNonZero = builder.CreateICmpNE(value, Constant::get(0));
+		auto transfer = builder.CreateAnd(notDelegateCall, valueNonZero);
+		builder.CreateCondBr(transfer, checkBalanceBB, callBB);
+
+		builder.SetInsertPoint(checkBalanceBB);
+		builder.CreateCall(queryFn, {addr, &env, builder.getInt32(EVM_ADDRESS), undef});
+		builder.CreateCall(queryFn, {v, &env, builder.getInt32(EVM_BALANCE), addr});
+		llvm::Value* balance = builder.CreateLoad(v);
+		balance = Endianness::toNative(builder, balance);
+		value = Endianness::toNative(builder, value);
+		auto balanceOk = builder.CreateICmpUGE(balance, value);
+		builder.CreateCondBr(balanceOk, callBB, failBB);
+
+		builder.SetInsertPoint(callBB);
+		llvm::Value* args[9];
+		auto outIt = std::begin(args);
+		for (auto it = func->arg_begin(); it != func->arg_end(); ++it, ++outIt)
+			*outIt = &*it;
+		auto ret = builder.CreateCall(callFunc, args);
+		builder.CreateRet(ret);
+
+		builder.SetInsertPoint(failBB);
+		auto failRet = builder.CreateOr(&gas, builder.getInt64(EVM_CALL_FAILURE));
+		builder.CreateRet(failRet);
 	}
 	return func;
 }
@@ -308,6 +380,14 @@ llvm::Value* Ext::balance(llvm::Value* _address)
 	auto address = Endianness::toBE(m_builder, _address);
 	auto v = createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_BALANCE), address});
 	return Endianness::toNative(m_builder, v);
+}
+
+llvm::Value* Ext::exists(llvm::Value* _address)
+{
+	auto func = getQueryFunc(getModule());
+	auto address = Endianness::toBE(m_builder, _address);
+	auto v = createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_ACCOUNT_EXISTS), address});
+	return m_builder.CreateTrunc(v, m_builder.getInt1Ty());
 }
 
 llvm::Value* Ext::blockHash(llvm::Value* _number)

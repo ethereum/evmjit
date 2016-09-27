@@ -761,9 +761,8 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 				ret, m_builder.getInt64(0), m_builder.getInt64(EVM_CALL_FAILURE),
 				"call.rmagic");
 			// TODO: optimize
-			auto finalCost = m_builder.CreateSub(r, rmagic, "create.finalcost");
-			_gasMeter.count(finalCost, _runtimeManager.getJmpBuf(),
-							_runtimeManager.getGasPtr());
+			auto gasLeft = m_builder.CreateSub(r, rmagic, "create.gasleft");
+			_runtimeManager.setGas(gasLeft);
 
 			llvm::Value* addr = m_builder.CreateLoad(pAddr);
 			addr = Endianness::toNative(m_builder, addr);
@@ -791,8 +790,8 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 															  EVM_DELEGATECALL;
 			auto callGas = stack.pop();
 			auto address = stack.pop();
-			auto value = (kind == EVM_DELEGATECALL) ?
-						 llvm::UndefValue::get(Type::Word) : stack.pop();
+			auto value = (kind == EVM_DELEGATECALL) ? Constant::get(0) : stack.pop();
+
 			auto inOff = stack.pop();
 			auto inSize = stack.pop();
 			auto outOff = stack.pop();
@@ -805,6 +804,16 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 											   // it will be after the in one
 			_memory.require(inOff, inSize);
 
+			if (inst == Instruction::CALL)
+			{
+				auto accountExists = _ext.exists(address);
+				auto penalty = m_builder.CreateSelect(accountExists,
+				                                      m_builder.getInt64(0),
+				                                      m_builder.getInt64(JITSchedule::callNewAccount::value));
+				_gasMeter.count(penalty, _runtimeManager.getJmpBuf(),
+				                _runtimeManager.getGasPtr());
+			}
+
 			auto transfer = m_builder.CreateICmpNE(value, Constant::get(0));
 			auto transferCost = m_builder.CreateSelect(
 				transfer, m_builder.getInt64(JITSchedule::valueTransferGas::value), m_builder.getInt64(0));
@@ -812,9 +821,9 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 							_runtimeManager.getGasPtr());
 			_gasMeter.count(callGas, _runtimeManager.getJmpBuf(),
 							_runtimeManager.getGasPtr());
-			auto gas = m_builder.CreateTrunc(callGas, Type::Gas, "call.gas");
-			auto initCost = m_builder.CreateAdd(gas, transferCost,
-												"call.initcost", true, true);
+			auto stipend = m_builder.CreateSelect(transfer, m_builder.getInt64(JITSchedule::callStipend::value), m_builder.getInt64(0));
+			auto gas = m_builder.CreateTrunc(callGas, Type::Gas, "call.gas.declared");
+			gas = m_builder.CreateAdd(gas, stipend, "call.gas", true, true);
 			auto r = _ext.call(kind, gas, address, value, inOff, inSize, outOff,
 							   outSize);
 			auto ret =
@@ -823,10 +832,8 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 				ret, m_builder.getInt64(0), m_builder.getInt64(EVM_CALL_FAILURE),
 				"call.rmagic");
 			// TODO: optimize
-			auto finalCost = m_builder.CreateSub(r, rmagic, "call.finalcost");
-			_gasMeter.giveBack(initCost);
-			_gasMeter.count(finalCost, _runtimeManager.getJmpBuf(),
-							_runtimeManager.getGasPtr());
+			auto finalGas = m_builder.CreateSub(r, rmagic, "call.finalgas");
+			_gasMeter.giveBack(finalGas);
 			stack.push(m_builder.CreateZExt(ret, Type::Word));
 			break;
 		}
