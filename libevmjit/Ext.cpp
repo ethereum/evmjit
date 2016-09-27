@@ -211,9 +211,7 @@ llvm::Function* getCallFunc(llvm::Module* _module)
 		builder.CreateRet(ret);
 
 		builder.SetInsertPoint(failBB);
-		auto isCreate = builder.CreateICmpEQ(&callKind, builder.getInt32(EVM_CREATE));
-		auto totalCost = builder.CreateSelect(isCreate, builder.getInt64(0), &gas);
-		auto failRet = builder.CreateOr(totalCost, builder.getInt64(EVM_CALL_FAILURE));
+		auto failRet = builder.CreateOr(&gas, builder.getInt64(EVM_CALL_FAILURE));
 		builder.CreateRet(failRet);
 	}
 	return func;

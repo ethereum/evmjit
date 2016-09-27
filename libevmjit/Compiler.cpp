@@ -761,9 +761,8 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 				ret, m_builder.getInt64(0), m_builder.getInt64(EVM_CALL_FAILURE),
 				"call.rmagic");
 			// TODO: optimize
-			auto finalCost = m_builder.CreateSub(r, rmagic, "create.finalcost");
-			_gasMeter.count(finalCost, _runtimeManager.getJmpBuf(),
-							_runtimeManager.getGasPtr());
+			auto gasLeft = m_builder.CreateSub(r, rmagic, "create.gasleft");
+			_runtimeManager.setGas(gasLeft);
 
 			llvm::Value* addr = m_builder.CreateLoad(pAddr);
 			addr = Endianness::toNative(m_builder, addr);
