@@ -101,7 +101,7 @@ function(get_link_libraries OUTPUT_LIST TARGET)
 				get_link_libraries(LINK_LIB_FILES ${LIB})
 				list(APPEND LIB_FILES ${LIB_FILE} ${LINK_LIB_FILES})
 			endif()
-		elseif (EXISTS ${LIB})
+		elseif (IS_ABSOLUTE ${LIB})
 			# Here LIB is a full path to a (hopefuly static) library. We don't
 			# want system libs (usually dynamic) here.
 			list(APPEND LIB_FILES ${LIB})
