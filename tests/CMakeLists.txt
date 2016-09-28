@@ -1,7 +1,6 @@
 
 add_executable(test-evmjit-standalone test-evmjit-standalone.c)
 target_include_directories(test-evmjit-standalone PRIVATE ../include)
-message("LIB ${EVMJIT_STANDALONE_LIB}")
 if (MSVC)
     set(SYSTEM_LIBS "")
 elseif (APPLE)
