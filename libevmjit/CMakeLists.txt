@@ -162,3 +162,8 @@ elseif (CMAKE_AR)
 	# FIXME: Looks it will be better to create evmjit-standalone as a library with costum steps instead of custom taget.
 	install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${EVMJIT_STANDALONE_FILE} DESTINATION ${CMAKE_INSTALL_LIBDIR} OPTIONAL)
 endif()
+
+# Export the full path to evmjit-standalone library to be used in tests.
+# TODO: It would be easier if evmjit-standalone was a library target, but it
+#       works for now.
+set(EVMJIT_STANDALONE_LIB ${CMAKE_CURRENT_BINARY_DIR}/${EVMJIT_STANDALONE_FILE} PARENT_SCOPE)
