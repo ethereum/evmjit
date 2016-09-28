@@ -6,4 +6,3 @@ cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DEVMJIT_INCLUDE_EXAMPLES=On -DEVMJIT_TESTS
 cmake --build .
 cmake --build . --target evmjit-standalone
 cmake --build . --target example-capi
-ctest
