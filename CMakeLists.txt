@@ -15,6 +15,7 @@ if (NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "x86_64|AMD64")
 endif()
 
 option(EVMJIT_INCLUDE_EXAMPLES "Generate build targets for the EVMJIT examples" OFF)
+option(EVMJIT_TESTS "Create targets for CTest" OFF)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_AUTOMOC OFF)
@@ -44,4 +45,9 @@ add_subdirectory(libevmjit)
 
 if (EVMJIT_INCLUDE_EXAMPLES)
 	add_subdirectory(examples)
+endif()
+
+if (EVMJIT_TESTS)
+	enable_testing()
+	add_subdirectory(tests)
 endif()

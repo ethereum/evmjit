@@ -11,4 +11,4 @@ dependencies:
 
 test:
   override:
-    - ldd build/libevmjit/libevmjit.so  # Just anything
+    - cd build && ctest
