@@ -22,7 +22,9 @@ cache:
 before_install:
   - cmake --version
 
-script: scripts/build.sh
+script:
+  - scripts/build.sh
+  - cd build && ctest
 
 deploy:
   provider: script
