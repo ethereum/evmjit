@@ -280,6 +280,12 @@ static void destroy(evm_instance* instance)
 	assert(instance == static_cast<void*>(&JITImpl::instance()));
 }
 
+static void release_result(evm_result const* result)
+{
+	if (result->internal_memory)
+		std::free(result->internal_memory);
+}
+
 static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 	evm_uint256be code_hash, uint8_t const* code, size_t code_size,
 	int64_t gas, uint8_t const* input, size_t input_size, evm_uint256be value)
@@ -302,6 +308,7 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 	result.output_data = nullptr;
 	result.output_size = 0;
 	result.internal_memory = nullptr;
+	result.release = release_result;
 
 	auto codeIdentifier = makeCodeId(code_hash, mode);
 	auto execFunc = jit.getExecFunc(codeIdentifier);
@@ -341,12 +348,6 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 	return result;
 }
 
-static void release_result(evm_result const* result)
-{
-	if (result->internal_memory)
-		std::free(result->internal_memory);
-}
-
 static int set_option(evm_instance* instance, char const* name,
 	char const* value)
 {
@@ -377,7 +378,7 @@ static void prepare_code(evm_instance* instance, evm_mode mode,
 
 EXPORT evm_interface evmjit_get_interface()
 {
-	return {EVM_ABI_VERSION, create, destroy, execute, release_result,
+	return {EVM_ABI_VERSION, create, destroy, execute,
 			get_code_status, prepare_code, set_option};
 }
 
