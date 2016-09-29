@@ -76,8 +76,8 @@ namespace cl = llvm::cl;
 cl::opt<bool> g_optimize{"O", cl::desc{"Optimize"}};
 cl::opt<CacheMode> g_cache{"cache", cl::desc{"Cache compiled EVM code on disk"},
 	cl::values(
-		clEnumValN(CacheMode::on,    "1", "Enabled"),
 		clEnumValN(CacheMode::off,   "0", "Disabled"),
+		clEnumValN(CacheMode::on,    "1", "Enabled"),
 		clEnumValN(CacheMode::read,  "r", "Read only. No new objects are added to cache."),
 		clEnumValN(CacheMode::write, "w", "Write only. No objects are loaded from cache."),
 		clEnumValN(CacheMode::clear, "c", "Clear the cache storage. Cache is disabled."),
