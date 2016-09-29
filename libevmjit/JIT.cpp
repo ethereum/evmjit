@@ -151,6 +151,38 @@ class SymbolResolver : public llvm::SectionMemoryManager
 		//       symbols (like memcpy, memset, etc) to improve performance.
 		return llvm::SectionMemoryManager::findSymbol(_name);
 	}
+
+	void reportMemorySize(size_t _addedSize)
+	{
+		if (!g_stats)
+			return;
+
+		m_totalMemorySize += _addedSize;
+		if (m_totalMemorySize >= m_printMemoryLimit)
+		{
+			static const auto M = 1024 * 1024;
+			auto value = double(m_totalMemorySize) / M;
+			std::cerr << "EVMJIT total memory size: " << value << '\n';
+			m_printMemoryLimit += M;
+		}
+	}
+
+	uint8_t* allocateCodeSection(uintptr_t _size, unsigned _a, unsigned _id,
+	                             llvm::StringRef _name) override
+	{
+		reportMemorySize(_size);
+		return llvm::SectionMemoryManager::allocateCodeSection(_size, _a, _id, _name);
+	}
+
+	uint8_t* allocateDataSection(uintptr_t _size, unsigned _a, unsigned _id,
+	                             llvm::StringRef _name, bool _ro) override
+	{
+		reportMemorySize(_size);
+		return llvm::SectionMemoryManager::allocateDataSection(_size, _a, _id, _name, _ro);
+	}
+
+	size_t m_totalMemorySize = 0;
+	size_t m_printMemoryLimit = 1024 * 1024;
 };
 
 
