@@ -21,8 +21,8 @@ class JITListener;
 
 enum class CacheMode
 {
-	on,
 	off,
+	on,
 	read,
 	write,
 	clear,
