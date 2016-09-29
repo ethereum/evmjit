@@ -63,8 +63,8 @@ function(configure_llvm_project TARGET_NAME)
             PREFIX llvm
             BINARY_DIR llvm  # Build directly to install dir to avoid copy.
             SOURCE_DIR llvm/src/llvm
-            URL http://llvm.org/releases/3.8.0/llvm-3.8.0.src.tar.xz
-            URL_HASH SHA256=555b028e9ee0f6445ff8f949ea10e9cd8be0d084840e21fbbe1d31d51fc06e46
+            URL http://llvm.org/releases/3.9.0/llvm-3.9.0.src.tar.xz
+            URL_HASH SHA256=66c73179da42cee1386371641241f79ded250e117a79f571bbd69e56daa48948
             CMAKE_ARGS -DCMAKE_BUILD_TYPE=Release
                        -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                        -DLLVM_ENABLE_TERMINFO=OFF  # Disable terminal color support
