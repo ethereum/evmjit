@@ -15,9 +15,10 @@ namespace eth
 namespace jit
 {
 
-GasMeter::GasMeter(IRBuilder& _builder, RuntimeManager& _runtimeManager):
+GasMeter::GasMeter(IRBuilder& _builder, RuntimeManager& _runtimeManager, evm_mode mode):
 	CompilerHelper(_builder),
-	m_runtimeManager(_runtimeManager)
+	m_runtimeManager(_runtimeManager),
+    m_mode(mode)
 {
 	llvm::Type* gasCheckArgs[] = {Type::Gas->getPointerTo(), Type::Gas, Type::BytePtr};
 	m_gasCheckFunc = llvm::Function::Create(llvm::FunctionType::get(Type::Void, gasCheckArgs, false), llvm::Function::PrivateLinkage, "gas.check", getModule());
@@ -168,7 +169,6 @@ int64_t GasMeter::getStepCost(Instruction inst) const
 	// Tier 0
 	case Instruction::STOP:
 	case Instruction::RETURN:
-	case Instruction::SUICIDE:
 	case Instruction::SSTORE: // Handle cost of SSTORE separately in GasMeter::countSStore()
 		return JITSchedule::stepGas0::value;
 
@@ -238,8 +238,12 @@ int64_t GasMeter::getStepCost(Instruction inst) const
 
 	// Tier 6
 	case Instruction::BALANCE:
+		return m_mode >= EVM_ANTI_DOS ? 400 : JITSchedule::stepGas6::value;
+
 	case Instruction::EXTCODESIZE:
 	case Instruction::EXTCODECOPY:
+		return m_mode >= EVM_ANTI_DOS ? 700 : JITSchedule::stepGas6::value;
+
 	case Instruction::BLOCKHASH:
 		return JITSchedule::stepGas6::value;
 
@@ -247,7 +251,7 @@ int64_t GasMeter::getStepCost(Instruction inst) const
 		return JITSchedule::sha3Gas::value;
 
 	case Instruction::SLOAD:
-		return JITSchedule::sloadGas::value;
+		return m_mode >= EVM_ANTI_DOS ? 200 : JITSchedule::sloadGas::value;
 
 	case Instruction::JUMPDEST:
 		return JITSchedule::jumpdestGas::value;
@@ -265,13 +269,16 @@ int64_t GasMeter::getStepCost(Instruction inst) const
 	case Instruction::CALL:
 	case Instruction::CALLCODE:
 	case Instruction::DELEGATECALL:
-		return JITSchedule::callGas::value;
+		return m_mode >= EVM_ANTI_DOS ? 700 : JITSchedule::callGas::value;
 
 	case Instruction::CREATE:
 		return JITSchedule::createGas::value;
+
+	case Instruction::SUICIDE:
+		return m_mode >= EVM_ANTI_DOS ? 5000 : JITSchedule::stepGas0::value;
 	}
 
-	return 0; // TODO: Add UNREACHABLE macro
+	LLVM_BUILTIN_UNREACHABLE;
 }
 
 }

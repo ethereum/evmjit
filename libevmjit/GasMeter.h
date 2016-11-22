@@ -1,5 +1,6 @@
 #pragma once
 
+#include <evm.h>
 #include "CompilerHelper.h"
 #include "Instruction.h"
 
@@ -15,7 +16,7 @@ using namespace evmjit;
 class GasMeter : public CompilerHelper // TODO: Use RuntimeHelper
 {
 public:
-	GasMeter(IRBuilder& _builder, RuntimeManager& _runtimeManager);
+	GasMeter(IRBuilder& _builder, RuntimeManager& _runtimeManager, evm_mode mode);
 
 	/// Count step cost of instruction
 	void count(Instruction _inst);
@@ -58,6 +59,9 @@ private:
 	llvm::Function* m_gasCheckFunc = nullptr;
 
 	RuntimeManager& m_runtimeManager;
+
+	/// EVM compatibility mode.
+	evm_mode m_mode;
 };
 
 }
