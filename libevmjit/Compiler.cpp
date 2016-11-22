@@ -851,7 +851,20 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 		}
 
 		case Instruction::SUICIDE:
-			_ext.selfdestruct(stack.pop());
+		{
+			auto address = stack.pop();
+			if (m_mode >= EVM_ANTI_DOS)
+			{
+				auto accountExists = _ext.exists(address);
+				auto penalty = m_builder.CreateSelect(accountExists,
+				                                      m_builder.getInt64(0),
+				                                      m_builder.getInt64(
+				                                              JITSchedule::callNewAccount::value));
+				_gasMeter.count(penalty, _runtimeManager.getJmpBuf(),
+				                _runtimeManager.getGasPtr());
+			}
+			_ext.selfdestruct(address);
+		}
 			// Fallthrough.
 		case Instruction::STOP:
 			_runtimeManager.exit(ReturnCode::Stop);
