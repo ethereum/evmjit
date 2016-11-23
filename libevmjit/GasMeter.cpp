@@ -276,9 +276,11 @@ int64_t GasMeter::getStepCost(Instruction inst) const
 
 	case Instruction::SUICIDE:
 		return m_mode >= EVM_ANTI_DOS ? 5000 : JITSchedule::stepGas0::value;
-	}
 
-	LLVM_BUILTIN_UNREACHABLE;
+	default:
+		// For invalid instruction just return 0.
+		return 0;
+	}
 }
 
 }
