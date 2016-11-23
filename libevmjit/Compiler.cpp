@@ -825,6 +825,18 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 				transfer, m_builder.getInt64(JITSchedule::valueTransferGas::value), m_builder.getInt64(0));
 			_gasMeter.count(transferCost, _runtimeManager.getJmpBuf(),
 							_runtimeManager.getGasPtr());
+
+			if (m_mode >= EVM_ANTI_DOS)
+			{
+				auto gas = _runtimeManager.getGas();
+				auto gas64th = m_builder.CreateLShr(gas, 6);
+				auto gasMaxAllowed = m_builder.CreateZExt(
+						m_builder.CreateSub(gas, gas64th, "gas.maxallowed",
+						                    true, true), Type::Word);
+				auto cmp = m_builder.CreateICmpUGT(callGas, gasMaxAllowed);
+				callGas = m_builder.CreateSelect(cmp, gasMaxAllowed, callGas);
+			}
+
 			_gasMeter.count(callGas, _runtimeManager.getJmpBuf(),
 							_runtimeManager.getGasPtr());
 			auto stipend = m_builder.CreateSelect(transfer, m_builder.getInt64(JITSchedule::callStipend::value), m_builder.getInt64(0));
