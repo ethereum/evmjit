@@ -752,9 +752,13 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 
 			_gasMeter.commitCostBlock();
 			auto gas = _runtimeManager.getGas();
+			llvm::Value* gasKept = (m_mode >= EVM_ANTI_DOS) ?
+			                       m_builder.CreateLShr(gas, 6) :
+			                       m_builder.getInt64(0);
+			auto createGas = m_builder.CreateSub(gas, gasKept, "create.gas", true, true);
 			llvm::Value* r = nullptr;
 			llvm::Value* pAddr = nullptr;
-			std::tie(r, pAddr) = _ext.create(gas, endowment, initOff, initSize);
+			std::tie(r, pAddr) = _ext.create(createGas, endowment, initOff, initSize);
 
 			auto ret =
 				m_builder.CreateICmpSGE(r, m_builder.getInt64(0), "create.ret");
@@ -763,7 +767,8 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 				"call.rmagic");
 			// TODO: optimize
 			auto gasLeft = m_builder.CreateSub(r, rmagic, "create.gasleft");
-			_runtimeManager.setGas(gasLeft);
+			gas = m_builder.CreateAdd(gasLeft, gasKept);
+			_runtimeManager.setGas(gas);
 
 			llvm::Value* addr = m_builder.CreateLoad(pAddr);
 			addr = Endianness::toNative(m_builder, addr);
