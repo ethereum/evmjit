@@ -751,9 +751,10 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			_memory.require(initOff, initSize);
 
 			_gasMeter.commitCostBlock();
+			auto gas = _runtimeManager.getGas();
 			llvm::Value* r = nullptr;
 			llvm::Value* pAddr = nullptr;
-			std::tie(r, pAddr) = _ext.create(endowment, initOff, initSize);
+			std::tie(r, pAddr) = _ext.create(gas, endowment, initOff, initSize);
 
 			auto ret =
 				m_builder.CreateICmpSGE(r, m_builder.getInt64(0), "create.ret");
