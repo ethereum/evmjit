@@ -44,6 +44,18 @@ namespace
 {
 using ExecFunc = ReturnCode(*)(ExecutionContext*);
 
+char modeToChar(evm_mode mode)
+{
+	switch (mode)
+	{
+	case EVM_FRONTIER: return 'F';
+	case EVM_HOMESTEAD: return 'H';
+	case EVM_ANTI_DOS: return 'A';
+	case EVM_CLEARING: return 'C';
+	}
+	LLVM_BUILTIN_UNREACHABLE;
+}
+
 /// Combine code hash and compatibility mode into a printable code identifier.
 std::string makeCodeId(evm_uint256be codeHash, evm_mode mode)
 {
@@ -55,7 +67,7 @@ std::string makeCodeId(evm_uint256be codeHash, evm_mode mode)
 		str.push_back(hexChars[b & 0xf]);
 		str.push_back(hexChars[b >> 4]);
 	}
-	str.push_back(mode == EVM_FRONTIER ? 'F' : 'H');
+	str.push_back(modeToChar(mode));
 	return str;
 }
 

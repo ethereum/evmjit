@@ -174,7 +174,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(code_iterator _begin, code_itera
 
 	// Init runtime structures.
 	RuntimeManager runtimeManager(m_builder, _begin, _end);
-	GasMeter gasMeter(m_builder, runtimeManager);
+	GasMeter gasMeter(m_builder, runtimeManager, m_mode);
 	Memory memory(runtimeManager, gasMeter);
 	Ext ext(runtimeManager, memory);
 	Arith256 arith(m_builder);
@@ -751,9 +751,14 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			_memory.require(initOff, initSize);
 
 			_gasMeter.commitCostBlock();
+			auto gas = _runtimeManager.getGas();
+			llvm::Value* gasKept = (m_mode >= EVM_ANTI_DOS) ?
+			                       m_builder.CreateLShr(gas, 6) :
+			                       m_builder.getInt64(0);
+			auto createGas = m_builder.CreateSub(gas, gasKept, "create.gas", true, true);
 			llvm::Value* r = nullptr;
 			llvm::Value* pAddr = nullptr;
-			std::tie(r, pAddr) = _ext.create(endowment, initOff, initSize);
+			std::tie(r, pAddr) = _ext.create(createGas, endowment, initOff, initSize);
 
 			auto ret =
 				m_builder.CreateICmpSGE(r, m_builder.getInt64(0), "create.ret");
@@ -762,7 +767,8 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 				"call.rmagic");
 			// TODO: optimize
 			auto gasLeft = m_builder.CreateSub(r, rmagic, "create.gasleft");
-			_runtimeManager.setGas(gasLeft);
+			gas = m_builder.CreateAdd(gasLeft, gasKept);
+			_runtimeManager.setGas(gas);
 
 			llvm::Value* addr = m_builder.CreateLoad(pAddr);
 			addr = Endianness::toNative(m_builder, addr);
@@ -804,24 +810,42 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 											   // it will be after the in one
 			_memory.require(inOff, inSize);
 
+			auto noTransfer = m_builder.CreateICmpEQ(value, Constant::get(0));
+			auto transferCost = m_builder.CreateSelect(
+					noTransfer, m_builder.getInt64(0),
+					m_builder.getInt64(JITSchedule::valueTransferGas::value));
+			_gasMeter.count(transferCost, _runtimeManager.getJmpBuf(),
+							_runtimeManager.getGasPtr());
+
 			if (inst == Instruction::CALL)
 			{
 				auto accountExists = _ext.exists(address);
-				auto penalty = m_builder.CreateSelect(accountExists,
+				auto noPenaltyCond = accountExists;
+				if (m_mode >= EVM_CLEARING)
+					noPenaltyCond = m_builder.CreateOr(accountExists, noTransfer);
+				auto penalty = m_builder.CreateSelect(noPenaltyCond,
 				                                      m_builder.getInt64(0),
 				                                      m_builder.getInt64(JITSchedule::callNewAccount::value));
 				_gasMeter.count(penalty, _runtimeManager.getJmpBuf(),
 				                _runtimeManager.getGasPtr());
 			}
 
-			auto transfer = m_builder.CreateICmpNE(value, Constant::get(0));
-			auto transferCost = m_builder.CreateSelect(
-				transfer, m_builder.getInt64(JITSchedule::valueTransferGas::value), m_builder.getInt64(0));
-			_gasMeter.count(transferCost, _runtimeManager.getJmpBuf(),
-							_runtimeManager.getGasPtr());
+			if (m_mode >= EVM_ANTI_DOS)
+			{
+				auto gas = _runtimeManager.getGas();
+				auto gas64th = m_builder.CreateLShr(gas, 6);
+				auto gasMaxAllowed = m_builder.CreateZExt(
+						m_builder.CreateSub(gas, gas64th, "gas.maxallowed",
+						                    true, true), Type::Word);
+				auto cmp = m_builder.CreateICmpUGT(callGas, gasMaxAllowed);
+				callGas = m_builder.CreateSelect(cmp, gasMaxAllowed, callGas);
+			}
+
 			_gasMeter.count(callGas, _runtimeManager.getJmpBuf(),
 							_runtimeManager.getGasPtr());
-			auto stipend = m_builder.CreateSelect(transfer, m_builder.getInt64(JITSchedule::callStipend::value), m_builder.getInt64(0));
+			auto stipend = m_builder.CreateSelect(
+					noTransfer, m_builder.getInt64(0),
+					m_builder.getInt64(JITSchedule::callStipend::value));
 			auto gas = m_builder.CreateTrunc(callGas, Type::Gas, "call.gas.declared");
 			gas = m_builder.CreateAdd(gas, stipend, "call.gas", true, true);
 			auto r = _ext.call(kind, gas, address, value, inOff, inSize, outOff,
@@ -851,7 +875,28 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 		}
 
 		case Instruction::SUICIDE:
-			_ext.selfdestruct(stack.pop());
+		{
+			auto dest = stack.pop();
+			if (m_mode >= EVM_ANTI_DOS)
+			{
+				auto destExists = _ext.exists(dest);
+				auto noPenaltyCond = destExists;
+				if (m_mode >= EVM_CLEARING)
+				{
+					auto addr = _ext.query(EVM_ADDRESS);
+					auto balance = _ext.balance(addr);
+					auto noTransfer = m_builder.CreateICmpEQ(balance,
+					                                         Constant::get(0));
+					noPenaltyCond = m_builder.CreateOr(destExists, noTransfer);
+				}
+				auto penalty = m_builder.CreateSelect(
+						noPenaltyCond, m_builder.getInt64(0),
+						m_builder.getInt64(JITSchedule::callNewAccount::value));
+				_gasMeter.count(penalty, _runtimeManager.getJmpBuf(),
+				                _runtimeManager.getGasPtr());
+			}
+			_ext.selfdestruct(dest);
+		}
 			// Fallthrough.
 		case Instruction::STOP:
 			_runtimeManager.exit(ReturnCode::Stop);

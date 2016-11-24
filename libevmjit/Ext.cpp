@@ -112,7 +112,7 @@ llvm::StructType* getMemRefTy(llvm::Module* _module)
 
 llvm::Function* getCallFunc(llvm::Module* _module)
 {
-	static const auto funcName = "evm.call";
+	static const auto funcName = "call";
 	auto func = _module->getFunction(funcName);
 	if (!func)
 	{
@@ -128,7 +128,7 @@ llvm::Function* getCallFunc(llvm::Module* _module)
 			Type::Gas,
 			{Type::EnvPtr, i32, Type::Gas, hash160Ty->getPointerTo(), Type::WordPtr, Type::BytePtr, Type::Size, Type::BytePtr, Type::Size},
 			false);
-		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, _module);
+		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, "evm.call", _module);
 		func->addAttribute(4, llvm::Attribute::ByVal);
 		func->addAttribute(4, llvm::Attribute::ReadOnly);
 		func->addAttribute(4, llvm::Attribute::NoAlias);
@@ -144,7 +144,7 @@ llvm::Function* getCallFunc(llvm::Module* _module)
 		auto callFunc = func;
 
 		// Create a call wrapper to handle additional checks.
-		func = llvm::Function::Create(fty, llvm::Function::PrivateLinkage, "call", _module);
+		func = llvm::Function::Create(fty, llvm::Function::PrivateLinkage, funcName, _module);
 		func->addAttribute(4, llvm::Attribute::ByVal);
 		func->addAttribute(4, llvm::Attribute::ReadOnly);
 		func->addAttribute(4, llvm::Attribute::NoAlias);
@@ -489,12 +489,12 @@ llvm::Value* Ext::call(evm_call_kind _kind,
 			   addr, value, inData, inSize, outData, outSize});
 }
 
-std::tuple<llvm::Value*, llvm::Value*> Ext::create(llvm::Value* _endowment,
+std::tuple<llvm::Value*, llvm::Value*> Ext::create(llvm::Value* _gas,
+                                                   llvm::Value* _endowment,
 												   llvm::Value* _initOff,
 												   llvm::Value* _initSize)
 {
 	auto addrTy = m_builder.getIntNTy(160);
-	auto gas = getRuntimeManager().getGas();
 	auto value = getArgAlloca();
 	m_builder.CreateStore(Endianness::toBE(m_builder, _endowment), value);
 	auto inData = m_memoryMan.getBytePtr(_initOff);
@@ -505,7 +505,7 @@ std::tuple<llvm::Value*, llvm::Value*> Ext::create(llvm::Value* _endowment,
 	auto func = getCallFunc(getModule());
 	auto ret = createCABICall(
 		func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_CREATE),
-			   gas, llvm::UndefValue::get(addrTy), value, inData, inSize, pAddr,
+			   _gas, llvm::UndefValue::get(addrTy), value, inData, inSize, pAddr,
 			   m_builder.getInt64(20)});
 
 	pAddr = m_builder.CreateBitCast(pAddr, addrTy->getPointerTo());
