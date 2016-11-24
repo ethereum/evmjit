@@ -810,21 +810,25 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 											   // it will be after the in one
 			_memory.require(inOff, inSize);
 
+			auto noTransfer = m_builder.CreateICmpEQ(value, Constant::get(0));
+			auto transferCost = m_builder.CreateSelect(
+					noTransfer, m_builder.getInt64(0),
+					m_builder.getInt64(JITSchedule::valueTransferGas::value));
+			_gasMeter.count(transferCost, _runtimeManager.getJmpBuf(),
+							_runtimeManager.getGasPtr());
+
 			if (inst == Instruction::CALL)
 			{
 				auto accountExists = _ext.exists(address);
-				auto penalty = m_builder.CreateSelect(accountExists,
+				auto noPenaltyCond = accountExists;
+				if (m_mode >= EVM_CLEARING)
+					noPenaltyCond = m_builder.CreateOr(accountExists, noTransfer);
+				auto penalty = m_builder.CreateSelect(noPenaltyCond,
 				                                      m_builder.getInt64(0),
 				                                      m_builder.getInt64(JITSchedule::callNewAccount::value));
 				_gasMeter.count(penalty, _runtimeManager.getJmpBuf(),
 				                _runtimeManager.getGasPtr());
 			}
-
-			auto transfer = m_builder.CreateICmpNE(value, Constant::get(0));
-			auto transferCost = m_builder.CreateSelect(
-				transfer, m_builder.getInt64(JITSchedule::valueTransferGas::value), m_builder.getInt64(0));
-			_gasMeter.count(transferCost, _runtimeManager.getJmpBuf(),
-							_runtimeManager.getGasPtr());
 
 			if (m_mode >= EVM_ANTI_DOS)
 			{
@@ -839,7 +843,9 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 
 			_gasMeter.count(callGas, _runtimeManager.getJmpBuf(),
 							_runtimeManager.getGasPtr());
-			auto stipend = m_builder.CreateSelect(transfer, m_builder.getInt64(JITSchedule::callStipend::value), m_builder.getInt64(0));
+			auto stipend = m_builder.CreateSelect(
+					noTransfer, m_builder.getInt64(0),
+					m_builder.getInt64(JITSchedule::callStipend::value));
 			auto gas = m_builder.CreateTrunc(callGas, Type::Gas, "call.gas.declared");
 			gas = m_builder.CreateAdd(gas, stipend, "call.gas", true, true);
 			auto r = _ext.call(kind, gas, address, value, inOff, inSize, outOff,
@@ -870,18 +876,26 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 
 		case Instruction::SUICIDE:
 		{
-			auto address = stack.pop();
+			auto dest = stack.pop();
 			if (m_mode >= EVM_ANTI_DOS)
 			{
-				auto accountExists = _ext.exists(address);
-				auto penalty = m_builder.CreateSelect(accountExists,
-				                                      m_builder.getInt64(0),
-				                                      m_builder.getInt64(
-				                                              JITSchedule::callNewAccount::value));
+				auto destExists = _ext.exists(dest);
+				auto noPenaltyCond = destExists;
+				if (m_mode >= EVM_CLEARING)
+				{
+					auto addr = _ext.query(EVM_ADDRESS);
+					auto balance = _ext.balance(addr);
+					auto noTransfer = m_builder.CreateICmpEQ(balance,
+					                                         Constant::get(0));
+					noPenaltyCond = m_builder.CreateOr(destExists, noTransfer);
+				}
+				auto penalty = m_builder.CreateSelect(
+						noPenaltyCond, m_builder.getInt64(0),
+						m_builder.getInt64(JITSchedule::callNewAccount::value));
 				_gasMeter.count(penalty, _runtimeManager.getJmpBuf(),
 				                _runtimeManager.getGasPtr());
 			}
-			_ext.selfdestruct(address);
+			_ext.selfdestruct(dest);
 		}
 			// Fallthrough.
 		case Instruction::STOP:
