@@ -90,7 +90,8 @@ void GasMeter::countExp(llvm::Value* _exponent)
 	auto lz = m_builder.CreateTrunc(lz256, Type::Gas, "lz");
 	auto sigBits = m_builder.CreateSub(m_builder.getInt64(256), lz, "sigBits");
 	auto sigBytes = m_builder.CreateUDiv(m_builder.CreateAdd(sigBits, m_builder.getInt64(7)), m_builder.getInt64(8));
-	count(m_builder.CreateNUWMul(sigBytes, m_builder.getInt64(JITSchedule::expByteGas::value)));
+	auto exponentByteCost = m_mode >= EVM_CLEARING ? 50 : JITSchedule::expByteGas::value;
+	count(m_builder.CreateNUWMul(sigBytes, m_builder.getInt64(exponentByteCost)));
 }
 
 void GasMeter::countSStore(Ext& _ext, llvm::Value* _index, llvm::Value* _newValue)
