@@ -691,8 +691,8 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 		case Instruction::EXTCODESIZE:
 		{
 			auto addr = stack.pop();
-			auto codeRef = _ext.extcode(addr);
-			stack.push(codeRef.size);
+			auto codesize = _ext.extcodesize(addr);
+			stack.push(codesize);
 			break;
 		}
 
