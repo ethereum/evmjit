@@ -424,6 +424,18 @@ MemoryRef Ext::extcode(llvm::Value* _addr)
 	return {code, size256};
 }
 
+llvm::Value* Ext::extcodesize(llvm::Value* _addr)
+{
+	auto func = getQueryFunc(getModule());
+	// TODO: We care only about 20 bytes here. Can we do it better?
+	auto address = Endianness::toBE(m_builder, _addr);
+	auto vPtr = createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_CODE_SIZE), address}, false);
+	auto int64ty = m_builder.getInt64Ty();
+	auto sizePtr = m_builder.CreateBitCast(vPtr, int64ty->getPointerTo());
+	auto size = m_builder.CreateLoad(int64ty, sizePtr, "codesize");
+	return m_builder.CreateZExt(size, Type::Word);
+}
+
 void Ext::log(llvm::Value* _memIdx, llvm::Value* _numBytes, llvm::ArrayRef<llvm::Value*> _topics)
 {
 	if (!m_topics)

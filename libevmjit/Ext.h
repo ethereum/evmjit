@@ -57,6 +57,7 @@ public:
 
 	llvm::Value* sha3(llvm::Value* _inOff, llvm::Value* _inSize);
 	MemoryRef extcode(llvm::Value* _addr);
+	llvm::Value* extcodesize(llvm::Value* _addr);
 
 	void log(llvm::Value* _memIdx, llvm::Value* _numBytes, llvm::ArrayRef<llvm::Value*> _topics);
 	void selfdestruct(llvm::Value* _beneficiary);
