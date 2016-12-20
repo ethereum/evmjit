@@ -3,13 +3,12 @@
 
 int main()
 {
-    struct evm_interface evmjit = evmjit_get_interface();
-    static const unsigned expected_abi_version = 0;
-    printf("EVMJIT ABI version %u\n", evmjit.abi_version);
-    if (expected_abi_version != evmjit.abi_version)
+    struct evm_factory factory = evmjit_get_factory();
+    if (EVM_ABI_VERSION != factory.abi_version)
     {
-        printf("Error: expected ABI version %u!\n", expected_abi_version);
+        printf("Error: expected ABI version %u!\n", EVM_ABI_VERSION);
         return 1;
     }
+    printf("EVMJIT ABI version %u\n", factory.abi_version);
     return 0;
 }
