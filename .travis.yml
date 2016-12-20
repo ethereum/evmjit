@@ -25,6 +25,7 @@ before_install:
 script:
   - scripts/build.sh
   - cd build && ctest
+  - cd ..
 
 deploy:
   provider: script
