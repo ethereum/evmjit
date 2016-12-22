@@ -72,7 +72,6 @@ llvm::Function* getQueryFunc(llvm::Module* _module)
 		func->addAttribute(1, llvm::Attribute::StructRet);
 		func->addAttribute(1, llvm::Attribute::NoAlias);
 		func->addAttribute(1, llvm::Attribute::NoCapture);
-		func->addAttribute(4, llvm::Attribute::ByVal);
 		func->addAttribute(4, llvm::Attribute::ReadOnly);
 		func->addAttribute(4, llvm::Attribute::NoAlias);
 		func->addAttribute(4, llvm::Attribute::NoCapture);
@@ -89,11 +88,9 @@ llvm::Function* getUpdateFunc(llvm::Module* _module)
 		auto i32 = llvm::IntegerType::getInt32Ty(_module->getContext());
 		auto fty = llvm::FunctionType::get(Type::Void, {Type::EnvPtr, i32, Type::WordPtr, Type::WordPtr}, false);
 		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, _module);
-		func->addAttribute(3, llvm::Attribute::ByVal);
 		func->addAttribute(3, llvm::Attribute::ReadOnly);
 		func->addAttribute(3, llvm::Attribute::NoAlias);
 		func->addAttribute(3, llvm::Attribute::NoCapture);
-		func->addAttribute(4, llvm::Attribute::ByVal);
 		func->addAttribute(4, llvm::Attribute::ReadOnly);
 		func->addAttribute(4, llvm::Attribute::NoAlias);
 		func->addAttribute(4, llvm::Attribute::NoCapture);
@@ -118,23 +115,14 @@ llvm::Function* getCallFunc(llvm::Module* _module)
 	{
 		auto i32 = llvm::IntegerType::getInt32Ty(_module->getContext());
 		auto hash160Ty = llvm::IntegerType::getIntNTy(_module->getContext(), 160);
-		// TODO: Should be use Triple here?
-		#ifdef _MSC_VER
-		auto onWindows = true;
-		#else
-		auto onWindows = false;
-		#endif
 		auto fty = llvm::FunctionType::get(
 			Type::Gas,
 			{Type::EnvPtr, i32, Type::Gas, hash160Ty->getPointerTo(), Type::WordPtr, Type::BytePtr, Type::Size, Type::BytePtr, Type::Size},
 			false);
 		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, "evm.call", _module);
-		func->addAttribute(4, llvm::Attribute::ByVal);
 		func->addAttribute(4, llvm::Attribute::ReadOnly);
 		func->addAttribute(4, llvm::Attribute::NoAlias);
 		func->addAttribute(4, llvm::Attribute::NoCapture);
-		if (!onWindows)
-			func->addAttribute(5, llvm::Attribute::ByVal);
 		func->addAttribute(5, llvm::Attribute::ReadOnly);
 		func->addAttribute(5, llvm::Attribute::NoAlias);
 		func->addAttribute(5, llvm::Attribute::NoCapture);
@@ -145,12 +133,9 @@ llvm::Function* getCallFunc(llvm::Module* _module)
 
 		// Create a call wrapper to handle additional checks.
 		func = llvm::Function::Create(fty, llvm::Function::PrivateLinkage, funcName, _module);
-		func->addAttribute(4, llvm::Attribute::ByVal);
 		func->addAttribute(4, llvm::Attribute::ReadOnly);
 		func->addAttribute(4, llvm::Attribute::NoAlias);
 		func->addAttribute(4, llvm::Attribute::NoCapture);
-		if (!onWindows)
-			func->addAttribute(5, llvm::Attribute::ByVal);
 		func->addAttribute(5, llvm::Attribute::ReadOnly);
 		func->addAttribute(5, llvm::Attribute::NoAlias);
 		func->addAttribute(5, llvm::Attribute::NoCapture);
@@ -264,7 +249,7 @@ llvm::Value* Ext::createCABICall(llvm::Function* _func, std::initializer_list<ll
 
 	for (auto&& farg: _func->args())
 	{
-		if (farg.hasByValAttr())
+		if (farg.hasByValAttr() || farg.getType()->isPointerTy())
 		{
 			auto& arg = args[farg.getArgNo()];
 			// TODO: Remove defensive check and always use it this way.
