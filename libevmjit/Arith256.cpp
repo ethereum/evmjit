@@ -35,157 +35,6 @@ void Arith256::debug(llvm::Value* _value, char _c, llvm::Module& _module, IRBuil
 
 namespace
 {
-llvm::Function* generateLongMulFunc(char const* _funcName, llvm::IntegerType* _ty, llvm::IntegerType* _wordTy, llvm::Module& _module)
-{
-	// C++ reference implementation:
-
-	//	using word = std::uint64_t;
-	//	using dword = __uint128_t;
-	//
-	//	static const auto wordBits = sizeof(word) * 8;
-	//
-	//	template<unsigned _N>
-	//	struct i
-	//	{
-	//		static const unsigned N = _N/8/sizeof(word);
-	//		word w[N];
-	//	};
-	//
-	//	using int256 = i<256>;
-	//
-	//	template<unsigned N>
-	//	i<N> long_mul(i<N> a, i<N> b)
-	//	{
-	//		decltype(a) r = {{0}};
-	//
-	//		for (int j = 0; j < b.N; ++j)
-	//		{
-	//			dword carry = 0;
-	//			for (int i = 0; i < (a.N - j); ++i)
-	//			{
-	//				auto& slot = r.w[j + i];
-	//
-	//				// sum of current multiplication, carry and the value from previous round using dword type
-	//				// no overflow because (2^N - 1)*(2^N - 1) + (2^N - 1) + (2^N - 1) == 2^2N - 1
-	//				auto s = (dword)b.w[j] * a.w[i] + carry + slot; // safe, no overflow
-	//
-	//				slot = (word) s;
-	//				carry = s >> wordBits;
-	//			}
-	//		}
-	//
-	//		return r;
-	//	}
-
-	auto func = llvm::Function::Create(llvm::FunctionType::get(_ty, {_ty, _ty}, false), llvm::Function::PrivateLinkage, _funcName, &_module);
-	func->setDoesNotAccessMemory();
-	func->setDoesNotThrow();
-
-	auto iter = func->arg_begin();
-	llvm::Argument* x = &(*iter++);
-	x->setName("x");
-	llvm::Argument* y = &(*iter);
-	y->setName("y");
-
-	auto entryBB = llvm::BasicBlock::Create(func->getContext(), "Entry", func);
-	auto outerLoopHeaderBB = llvm::BasicBlock::Create(func->getContext(), "OuterLoop.Header", func);
-	auto innerLoopBB = llvm::BasicBlock::Create(func->getContext(), "InnerLoop", func);
-	auto outerLoopFooterBB = llvm::BasicBlock::Create(func->getContext(), "OuterLoop.Footer", func);
-	auto exitBB = llvm::BasicBlock::Create(func->getContext(), "Exit", func);
-
-	auto builder = IRBuilder{entryBB};
-	auto dwordTy = builder.getIntNTy(_wordTy->getBitWidth() * 2);
-	auto indexTy = builder.getInt32Ty();
-	auto _0 = builder.getInt32(0);
-	auto _1 = builder.getInt32(1);
-	auto wordMask = builder.CreateZExt(llvm::ConstantInt::get(_wordTy, -1, true), dwordTy);
-	auto wordBitWidth = builder.getInt32(_wordTy->getBitWidth());
-	assert(_ty->getBitWidth() / _wordTy->getBitWidth() >= 4 && "Word type must be at least 4 times smaller than full type");
-	auto dim = builder.getInt32(_ty->getBitWidth() / _wordTy->getBitWidth());
-	builder.CreateBr(outerLoopHeaderBB);
-
-	auto extractWordAsDword = [&](llvm::Value* _a, llvm::Value* _idx, llvm::Twine const& _name)
-	{
-		auto word = builder.CreateLShr(_a, builder.CreateZExt(builder.CreateNUWMul(_idx, wordBitWidth), _ty));
-		word = builder.CreateAnd(builder.CreateTrunc(word, dwordTy), wordMask, _name);
-		return word;
-	};
-
-	builder.SetInsertPoint(outerLoopHeaderBB);
-	auto j = builder.CreatePHI(indexTy, 2, "j");
-	auto p = builder.CreatePHI(_ty, 2, "p");
-	auto yj = extractWordAsDword(y, j, "y.j");
-	auto iEnd = builder.CreateSub(dim, j, "i.end", true, true);
-	builder.CreateBr(innerLoopBB);
-
-	builder.SetInsertPoint(innerLoopBB);
-	auto i = builder.CreatePHI(indexTy, 2, "i");
-	auto pInner = builder.CreatePHI(_ty, 2, "p.inner");
-	auto carry = builder.CreatePHI(_wordTy, 2, "carry");
-
-	auto k = builder.CreateNUWAdd(i, j, "k");
-	auto offset = builder.CreateZExt(builder.CreateNUWMul(k, wordBitWidth), _ty, "offset");
-	auto xi = extractWordAsDword(x, i, "x.i");
-	auto m = builder.CreateNUWMul(xi, yj, "m");
-	auto mask = builder.CreateShl(builder.CreateZExt(wordMask, _ty), offset, "mask");
-	auto nmask = builder.CreateXor(mask, llvm::ConstantInt::get(_ty, -1, true), "nmask");
-	auto w = builder.CreateTrunc(builder.CreateLShr(pInner, offset), dwordTy);
-	w = builder.CreateAnd(w, wordMask, "w");
-	auto s = builder.CreateAdd(w, builder.CreateZExt(carry, dwordTy), "s.wc", true, true);
-	s = builder.CreateNUWAdd(s, m, "s");
-	auto carryNext = builder.CreateTrunc(builder.CreateLShr(s, llvm::ConstantInt::get(dwordTy, _wordTy->getBitWidth())), _wordTy, "carry.next");
-	auto wNext = builder.CreateAnd(s, wordMask);
-	auto pMasked = builder.CreateAnd(pInner, nmask, "p.masked");
-	auto pNext = builder.CreateOr(builder.CreateShl(builder.CreateZExt(wNext, _ty), offset), pMasked, "p.next");
-
-	auto iNext = builder.CreateNUWAdd(i, _1, "i.next");
-	auto innerLoopCond = builder.CreateICmpEQ(iNext, iEnd, "i.cond");
-	builder.CreateCondBr(innerLoopCond, outerLoopFooterBB, innerLoopBB);
-	i->addIncoming(_0, outerLoopHeaderBB);
-	i->addIncoming(iNext, innerLoopBB);
-	pInner->addIncoming(p, outerLoopHeaderBB);
-	pInner->addIncoming(pNext, innerLoopBB);
-	carry->addIncoming(llvm::ConstantInt::get(_wordTy, 0), outerLoopHeaderBB);
-	carry->addIncoming(carryNext, innerLoopBB);
-
-	builder.SetInsertPoint(outerLoopFooterBB);
-	auto jNext = builder.CreateNUWAdd(j, _1, "j.next");
-	auto outerLoopCond = builder.CreateICmpEQ(jNext, dim, "j.cond");
-	builder.CreateCondBr(outerLoopCond, exitBB, outerLoopHeaderBB);
-	j->addIncoming(_0, entryBB);
-	j->addIncoming(jNext, outerLoopFooterBB);
-	p->addIncoming(llvm::ConstantInt::get(_ty, 0), entryBB);
-	p->addIncoming(pNext, outerLoopFooterBB);
-
-	builder.SetInsertPoint(exitBB);
-	builder.CreateRet(pNext);
-
-	return func;
-}
-}
-
-
-llvm::Function* Arith256::getMulFunc(llvm::Module& _module)
-{
-	static const auto funcName = "evm.mul.i256";
-	if (auto func = _module.getFunction(funcName))
-		return func;
-
-	return generateLongMulFunc(funcName, Type::Word, Type::Size, _module);
-}
-
-llvm::Function* Arith256::getMul512Func(llvm::Module& _module)
-{
-	static const auto funcName = "evm.mul.i512";
-	if (auto func = _module.getFunction(funcName))
-		return func;
-
-	auto i512Ty = llvm::IntegerType::get(_module.getContext(), 512);
-	return generateLongMulFunc(funcName, i512Ty, Type::Size, _module);
-}
-
-namespace
-{
 llvm::Function* createUDivRemFunc(llvm::Type* _type, llvm::Module& _module, char const* _funcName)
 {
 	// Based of "Improved shift divisor algorithm" from "Software Integer Division" by Microsoft Research
@@ -503,15 +352,14 @@ llvm::Function* Arith256::getExpFunc()
 		m_builder.CreateCondBr(eOdd, updateBB, continueBB);
 
 		m_builder.SetInsertPoint(updateBB);
-		auto mul256Func = getMulFunc(*getModule());
-		auto r0 = m_builder.CreateCall(mul256Func, {r, b});
+		auto r0 = m_builder.CreateMul(r, b);
 		m_builder.CreateBr(continueBB);
 
 		m_builder.SetInsertPoint(continueBB);
 		auto r1 = m_builder.CreatePHI(Type::Word, 2, "r1");
 		r1->addIncoming(r, bodyBB);
 		r1->addIncoming(r0, updateBB);
-		auto b1 = m_builder.CreateCall(mul256Func, {b, b});
+		auto b1 = m_builder.CreateMul(b, b);
 		auto e1 = m_builder.CreateLShr(e, Constant::get(1), "e1");
 		m_builder.CreateBr(headerBB);
 
