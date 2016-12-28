@@ -4,6 +4,7 @@
 
 #include "preprocessor/llvm_includes_start.h"
 #include <llvm/IR/Module.h>
+#include <llvm/IR/Mangler.h>
 #include <llvm/ADT/StringSwitch.h>
 #include <llvm/ADT/Triple.h>
 #include <llvm/ExecutionEngine/MCJIT.h>
@@ -12,6 +13,10 @@
 #include <llvm/Support/Host.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/ManagedStatic.h>
+#include <llvm/ExecutionEngine/Orc/CompileUtils.h>
+#include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
+#include <llvm/ExecutionEngine/Orc/IRCompileLayer.h>
+#include <llvm/ExecutionEngine/Orc/LambdaResolver.h>
 #include "preprocessor/llvm_includes_end.h"
 
 #include "Compiler.h"
@@ -105,11 +110,77 @@ void parseOptions()
 	cl::ParseEnvironmentOptions("evmjit", "EVMJIT", "Ethereum EVM JIT Compiler");
 }
 
-class JITImpl
+class EVMJIT
 {
-	std::unique_ptr<llvm::ExecutionEngine> m_engine;
-	mutable std::mutex x_codeMap;
-	std::unordered_map<std::string, ExecFunc> m_codeMap;
+	std::unique_ptr<llvm::TargetMachine> m_tm;
+	const llvm::DataLayout m_dl;
+	llvm::orc::ObjectLinkingLayer<> m_linker;
+	llvm::orc::IRCompileLayer<decltype(m_linker)> m_compiler;
+
+public:
+	using ModuleHandle = decltype(m_compiler)::ModuleSetHandleT;
+
+	evm_query_fn queryFn = nullptr;
+	evm_update_fn updateFn = nullptr;
+	evm_call_fn callFn = nullptr;
+
+	EVMJIT():
+			m_tm(llvm::EngineBuilder{}.selectTarget()),
+			m_dl(m_tm->createDataLayout()),
+			m_compiler(m_linker, llvm::orc::SimpleCompiler(*m_tm))
+	{
+		auto f = m_tm->getTargetFeatureString().str();
+		std::cerr << m_tm->getTargetTriple().str() << " " << f;
+	}
+
+	static EVMJIT& instance()
+	{
+		static EVMJIT s_instance;
+		return s_instance;
+	}
+
+	ModuleHandle addModule(std::unique_ptr<llvm::Module> module)
+	{
+		auto Resolver = llvm::orc::createLambdaResolver(
+				[&](const std::string &Name) {
+					// TODO: We don't expect any local symbols.
+					if (auto Sym = m_compiler.findSymbol(Name, false))
+						return Sym.toRuntimeDyldSymbol();
+					return llvm::RuntimeDyld::SymbolInfo(nullptr);
+				},
+				[this](std::string const& name) -> llvm::RuntimeDyld::SymbolInfo
+				{
+					auto addr = llvm::StringSwitch<uint64_t>(name)
+							.Case("env_sha3", reinterpret_cast<uint64_t>(&dev::evmjit::keccak))
+							.Case("free", reinterpret_cast<uint64_t>(&std::free))
+							.Case("realloc", reinterpret_cast<uint64_t>(&std::realloc))
+							.Case("malloc", reinterpret_cast<uint64_t>(&std::malloc))
+							.Case("memcpy", reinterpret_cast<uint64_t>(&std::memcpy))
+							.Case("memset", reinterpret_cast<uint64_t>(&std::memset))
+							.Case("evm.query", reinterpret_cast<uint64_t>(this->queryFn))
+							.Case("evm.update", reinterpret_cast<uint64_t>(this->updateFn))
+							.Case("evm.call", reinterpret_cast<uint64_t>(this->callFn))
+							.Default(0);
+					return {addr, llvm::JITSymbolFlags::Exported};
+				});
+
+		// Build a singlton module set to hold our module.
+		std::vector<std::unique_ptr<llvm::Module>> Ms;
+		Ms.push_back(std::move(module));
+
+		// Add the set to the JIT with the resolver we created above and a newly
+		// created SectionMemoryManager.
+		return m_compiler.addModuleSet(std::move(Ms),
+		                               llvm::make_unique<llvm::SectionMemoryManager>(),
+		                               std::move(Resolver));
+	}
+
+	llvm::orc::JITSymbol findSymbol(const std::string& Name) {
+		std::string MangledName;
+		llvm::raw_string_ostream MangledNameStream(MangledName);
+		llvm::Mangler::getNameWithPrefix(MangledNameStream, Name, m_dl);
+		return m_compiler.findSymbol(MangledNameStream.str(), false);
+	}
 
 	static llvm::LLVMContext& getLLVMContext()
 	{
@@ -119,51 +190,42 @@ class JITImpl
 		return llvmContext;
 	}
 
-public:
-	static JITImpl& instance()
+	ExecFunc compile(evm_mode _mode, byte const* _code, uint64_t _codeSize, std::string const& _codeIdentifier)
 	{
-		// We need to keep this a singleton.
-		// so we only call changeVersion on it.
-		static JITImpl s_instance;
-		return s_instance;
+		auto module = Cache::getObject(_codeIdentifier, getLLVMContext());
+		if (!module)
+		{
+			// TODO: Listener support must be redesigned. These should be a feature of JITImpl
+			//listener->stateChanged(ExecState::Compilation);
+			assert(_code || !_codeSize);
+			//TODO: Can the Compiler be stateless?
+			module = Compiler({}, _mode, getLLVMContext()).compile(_code, _code + _codeSize, _codeIdentifier);
+
+			if (g_optimize)
+			{
+				//listener->stateChanged(ExecState::Optimization);
+				optimize(*module);
+			}
+
+			prepare(*module);
+		}
+		if (g_dump)
+			module->dump();
+
+		addModule(std::move(module));
+		return getExecFunc(_codeIdentifier);
 	}
 
-	JITImpl();
-
-	llvm::ExecutionEngine& engine() { return *m_engine; }
-
-	ExecFunc getExecFunc(std::string const& _codeIdentifier) const;
-	void mapExecFunc(std::string const& _codeIdentifier, ExecFunc _funcAddr);
-
-	ExecFunc compile(evm_mode _mode, byte const* _code, uint64_t _codeSize, std::string const& _codeIdentifier);
-
-	evm_query_fn queryFn = nullptr;
-	evm_update_fn updateFn = nullptr;
-	evm_call_fn callFn = nullptr;
+	ExecFunc getExecFunc(std::string const& _codeIdentifier)
+	{
+		auto sym = findSymbol(_codeIdentifier);
+		return (ExecFunc)sym.getAddress();
+	}
 };
 
 
 class SymbolResolver : public llvm::SectionMemoryManager
 {
-	llvm::RuntimeDyld::SymbolInfo findSymbol(std::string const& _name) override
-	{
-		auto& jit = JITImpl::instance();
-		auto addr = llvm::StringSwitch<uint64_t>(_name)
-			.Case("env_sha3", reinterpret_cast<uint64_t>(&keccak))
-			.Case("evm.query", reinterpret_cast<uint64_t>(jit.queryFn))
-			.Case("evm.update", reinterpret_cast<uint64_t>(jit.updateFn))
-			.Case("evm.call", reinterpret_cast<uint64_t>(jit.callFn))
-			.Default(0);
-		if (addr)
-			return {addr, llvm::JITSymbolFlags::Exported};
-
-		// Fallback to default implementation that would search for the symbol
-		// in the current process.
-		// TODO: In the future we should control the whole set of requested
-		//       symbols (like memcpy, memset, etc) to improve performance.
-		return llvm::SectionMemoryManager::findSymbol(_name);
-	}
-
 	void reportMemorySize(size_t _addedSize)
 	{
 		if (!g_stats)
@@ -197,87 +259,6 @@ class SymbolResolver : public llvm::SectionMemoryManager
 	size_t m_printMemoryLimit = 1024 * 1024;
 };
 
-
-JITImpl::JITImpl()
-{
-	parseOptions();
-
-	bool preloadCache = g_cache == CacheMode::preload;
-	if (preloadCache)
-		g_cache = CacheMode::on;
-
-	llvm::InitializeNativeTarget();
-	llvm::InitializeNativeTargetAsmPrinter();
-
-	auto module = llvm::make_unique<llvm::Module>("", getLLVMContext());
-
-	// FIXME: LLVM 3.7: test on Windows
-	auto triple = llvm::Triple(llvm::sys::getProcessTriple());
-	if (triple.getOS() == llvm::Triple::OSType::Win32)
-		triple.setObjectFormat(llvm::Triple::ObjectFormatType::ELF);  // MCJIT does not support COFF format
-	module->setTargetTriple(triple.str());
-
-	llvm::EngineBuilder builder(std::move(module));
-	builder.setEngineKind(llvm::EngineKind::JIT);
-	builder.setMCJITMemoryManager(llvm::make_unique<SymbolResolver>());
-	builder.setOptLevel(g_optimize ? llvm::CodeGenOpt::Default : llvm::CodeGenOpt::None);
-	#ifndef NDEBUG
-	builder.setVerifyModules(true);
-	#endif
-
-	m_engine.reset(builder.create());
-
-	// TODO: Update cache listener
-	m_engine->setObjectCache(Cache::init(g_cache, nullptr));
-
-	// FIXME: Disabled during API changes
-	//if (preloadCache)
-	//	Cache::preload(*m_engine, funcCache);
-}
-
-ExecFunc JITImpl::getExecFunc(std::string const& _codeIdentifier) const
-{
-	std::lock_guard<std::mutex> lock{x_codeMap};
-	auto it = m_codeMap.find(_codeIdentifier);
-	if (it != m_codeMap.end())
-		return it->second;
-	return nullptr;
-}
-
-void JITImpl::mapExecFunc(std::string const& _codeIdentifier, ExecFunc _funcAddr)
-{
-	std::lock_guard<std::mutex> lock{x_codeMap};
-	m_codeMap.emplace(_codeIdentifier, _funcAddr);
-}
-
-ExecFunc JITImpl::compile(evm_mode _mode, byte const* _code, uint64_t _codeSize,
-	std::string const& _codeIdentifier)
-{
-	auto module = Cache::getObject(_codeIdentifier, getLLVMContext());
-	if (!module)
-	{
-		// TODO: Listener support must be redesigned. These should be a feature of JITImpl
-		//listener->stateChanged(ExecState::Compilation);
-		assert(_code || !_codeSize);
-		//TODO: Can the Compiler be stateless?
-		module = Compiler({}, _mode, getLLVMContext()).compile(_code, _code + _codeSize, _codeIdentifier);
-
-		if (g_optimize)
-		{
-			//listener->stateChanged(ExecState::Optimization);
-			optimize(*module);
-		}
-
-		prepare(*module);
-	}
-	if (g_dump)
-		module->dump();
-
-	m_engine->addModule(std::move(module));
-	//listener->stateChanged(ExecState::CodeGen);
-	return (ExecFunc)m_engine->getFunctionAddress(_codeIdentifier);
-}
-
 } // anonymous namespace
 
 
@@ -309,9 +290,15 @@ extern "C"
 static evm_instance* create(evm_query_fn queryFn, evm_update_fn updateFn,
 	evm_call_fn callFn)
 {
+	parseOptions();
+
+	// FIXME: Move it from here.
+	llvm::InitializeNativeTarget();
+	llvm::InitializeNativeTargetAsmPrinter();
+
 	// Let's always return the same instance. It's a bit of faking, but actually
 	// this might be a compliant implementation.
-	auto& jit = JITImpl::instance();
+	auto& jit = EVMJIT::instance();
 	jit.queryFn = queryFn;
 	jit.updateFn = updateFn;
 	jit.callFn = callFn;
@@ -320,8 +307,8 @@ static evm_instance* create(evm_query_fn queryFn, evm_update_fn updateFn,
 
 static void destroy(evm_instance* instance)
 {
-    (void)instance;
-	assert(instance == static_cast<void*>(&JITImpl::instance()));
+	(void)instance;
+	assert(instance == static_cast<void*>(&EVMJIT::instance()));
 }
 
 static void release_result(evm_result const* result)
@@ -334,7 +321,7 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 	evm_uint256be code_hash, uint8_t const* code, size_t code_size,
 	int64_t gas, uint8_t const* input, size_t input_size, evm_uint256be value)
 {
-	auto& jit = *reinterpret_cast<JITImpl*>(instance);
+	auto& jit = *reinterpret_cast<EVMJIT*>(instance);
 
 	RuntimeData rt;
 	rt.code = code;
@@ -357,12 +344,7 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 	auto codeIdentifier = makeCodeId(code_hash, mode);
 	auto execFunc = jit.getExecFunc(codeIdentifier);
 	if (!execFunc)
-	{
 		execFunc = jit.compile(mode, ctx.code(), ctx.codeSize(), codeIdentifier);
-		if (!execFunc)
-			return result;
-		jit.mapExecFunc(codeIdentifier, execFunc);
-	}
 
 	auto returnCode = execFunc(&ctx);
 
@@ -402,7 +384,7 @@ static int set_option(evm_instance* instance, char const* name,
 static evm_code_status get_code_status(evm_instance* instance,
 	evm_mode mode, evm_uint256be code_hash)
 {
-	auto& jit = *reinterpret_cast<JITImpl*>(instance);
+	auto& jit = *reinterpret_cast<EVMJIT*>(instance);
 	auto codeIdentifier = makeCodeId(code_hash, mode);
 	if (jit.getExecFunc(codeIdentifier) != nullptr)
 		return EVM_READY;
@@ -413,11 +395,9 @@ static evm_code_status get_code_status(evm_instance* instance,
 static void prepare_code(evm_instance* instance, evm_mode mode,
 	evm_uint256be code_hash, unsigned char const* code, size_t code_size)
 {
-	auto& jit = *reinterpret_cast<JITImpl*>(instance);
+	auto& jit = *reinterpret_cast<EVMJIT*>(instance);
 	auto codeIdentifier = makeCodeId(code_hash, mode);
-	auto execFunc = jit.compile(mode, code, code_size, codeIdentifier);
-	if (execFunc) // FIXME: What with error?
-		jit.mapExecFunc(codeIdentifier, execFunc);
+	jit.compile(mode, code, code_size, codeIdentifier);
 }
 
 EXPORT evm_interface evmjit_get_interface()
