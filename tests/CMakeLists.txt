@@ -1,4 +1,9 @@
+# Compile tests for headers:
+add_library(test-evm-header-cpp STATIC test-evm.cpp)
+target_include_directories(test-evm-header-cpp PRIVATE ../include)
 
+
+# Library tests:
 add_executable(test-evmjit-standalone test-evmjit-standalone.c)
 target_include_directories(test-evmjit-standalone PRIVATE ../include)
 if (MSVC)
