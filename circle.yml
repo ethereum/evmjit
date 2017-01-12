@@ -1,13 +1,11 @@
 dependencies:
-  pre:
-    - sudo apt-add-repository -y ppa:george-edison55/cmake-3.x
-    - sudo apt -q update
-    - sudo apt -qy install cmake
   override:
-    - BUILD_TYPE=RelWithDebInfo scripts/build.sh
+    - scripts/install_cmake.sh
+    - PATH=~/.local/bin:$PATH BUILD_TYPE=RelWithDebInfo scripts/build.sh
   cache_directories:
     # TODO: add ccache
     - build/llvm  # Cache llvm build
+    - ~/.local
 
 test:
   override:

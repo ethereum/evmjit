@@ -3,9 +3,10 @@ branches:
   only:
   - develop
 configuration:
-- Debug
-- Release
-cache: build/llvm
+  - Debug
+  - Release
+cache:
+  - build/llvm -> cmake/llvm.cmake
 before_build: |
   if not exist build mkdir build
   cd build

@@ -35,11 +35,12 @@ function(configure_llvm_project TARGET_NAME)
         # Only used here locally to setup the "llvm" imported target
         set(LIBS
             LLVMMCJIT
-            LLVMX86CodeGen LLVMX86Desc LLVMX86Info LLVMMCDisassembler LLVMX86AsmPrinter
-            LLVMX86Utils LLVMSelectionDAG LLVMAsmPrinter LLVMCodeGen
-            LLVMInstrumentation LLVMBitWriter LLVMipo LLVMVectorize LLVMScalarOpts
-            LLVMProfileData LLVMIRReader LLVMAsmParser LLVMInstCombine
-            LLVMTransformUtils LLVMExecutionEngine LLVMTarget LLVMAnalysis
+            LLVMX86CodeGen LLVMX86Desc LLVMX86Info LLVMMCDisassembler
+            LLVMX86AsmPrinter LLVMX86Utils LLVMSelectionDAG LLVMAsmPrinter
+            LLVMDebugInfoCodeView LLVMCodeGen LLVMBitWriter LLVMipo
+            LLVMInstrumentation LLVMVectorize LLVMScalarOpts LLVMLinker
+            LLVMIRReader LLVMAsmParser LLVMInstCombine LLVMTransformUtils
+            LLVMExecutionEngine LLVMTarget LLVMAnalysis LLVMProfileData
             LLVMRuntimeDyld LLVMObject LLVMMCParser LLVMBitReader LLVMMC
             LLVMCore LLVMSupport
         )
@@ -61,10 +62,11 @@ function(configure_llvm_project TARGET_NAME)
         include(ExternalProject)
         ExternalProject_Add(llvm-project
             PREFIX llvm
+            DOWNLOAD_DIR ${CMAKE_CURRENT_LIST_DIR}/downloads
             BINARY_DIR llvm  # Build directly to install dir to avoid copy.
             SOURCE_DIR llvm/src/llvm
-            URL http://llvm.org/releases/3.8.0/llvm-3.8.0.src.tar.xz
-            URL_HASH SHA256=555b028e9ee0f6445ff8f949ea10e9cd8be0d084840e21fbbe1d31d51fc06e46
+            URL http://llvm.org/releases/3.9.1/llvm-3.9.1.src.tar.xz
+            URL_HASH SHA256=1fd90354b9cf19232e8f168faf2220e79be555df3aa743242700879e8fd329ee
             CMAKE_ARGS -DCMAKE_BUILD_TYPE=Release
                        -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                        -DLLVM_ENABLE_TERMINFO=OFF  # Disable terminal color support
