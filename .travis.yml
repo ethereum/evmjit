@@ -19,10 +19,8 @@ cache:
   directories: build/llvm
 
 
-before_install:
-  - cmake --version
-
 script:
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then scripts/install_cmake.sh; fi
   - scripts/build.sh
   - cd build && ctest
   - cd ..
