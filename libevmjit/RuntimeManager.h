@@ -23,6 +23,8 @@ public:
 	llvm::Value* getDataPtr();
 	llvm::Value* getEnvPtr();
 
+	llvm::Value* getAddress();
+	llvm::Value* getSender();
 	llvm::Value* getValue();
 	llvm::Value* getGas();
 	llvm::Value* getGasPtr();
@@ -30,6 +32,7 @@ public:
 	llvm::Value* getCode();
 	llvm::Value* getCodeSize();
 	llvm::Value* getCallDataSize();
+	llvm::Value* getDepth();
 	llvm::Value* getJmpBuf() { return m_jmpBuf; }
 	void setGas(llvm::Value* _gas);
 

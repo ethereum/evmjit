@@ -35,12 +35,15 @@ struct RuntimeData
 		ApparentCallValue,		// value of msg.value - different during DELEGATECALL
 		Code,
 		CodeSize,
+		Address,
+		Caller,
+		Depth,
 
 		ReturnData 		   = CallData,		///< Return data pointer (set only in case of RETURN)
 		ReturnDataSize 	   = CallDataSize,	///< Return data size (set only in case of RETURN)
 	};
 
-	static size_t const numElements = CodeSize + 1;
+	static size_t const numElements = Depth + 1;
 
 	int64_t 	gas = 0;
 	int64_t 	gasPrice = 0;
@@ -49,6 +52,9 @@ struct RuntimeData
 	i256 		apparentValue;
 	byte const* code = nullptr;
 	uint64_t 	codeSize = 0;
+	byte        address[32];
+	byte        caller[32];
+	int64_t     depth;
 };
 
 struct JITSchedule

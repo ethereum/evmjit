@@ -131,6 +131,11 @@ llvm::Function* getCallFunc(llvm::Module* _module)
 		auto callFunc = func;
 
 		// Create a call wrapper to handle additional checks.
+		fty = llvm::FunctionType::get(
+			Type::Gas,
+			{Type::EnvPtr, i32, Type::Gas, hash160Ty->getPointerTo(), Type::WordPtr, Type::BytePtr, Type::Size, Type::BytePtr, Type::Size, Type::Word, Type::Size},
+			false
+		);
 		func = llvm::Function::Create(fty, llvm::Function::PrivateLinkage, funcName, _module);
 		func->addAttribute(4, llvm::Attribute::ReadOnly);
 		func->addAttribute(4, llvm::Attribute::NoAlias);
@@ -150,6 +155,11 @@ llvm::Function* getCallFunc(llvm::Module* _module)
 		auto& gas = *iter;
 		std::advance(iter, 2);
 		auto& valuePtr = *iter;
+		std::advance(iter, 5);
+		auto& addr = *iter;
+		std::advance(iter, 1);
+		auto& depth = *iter;
+
 
 		auto& ctx = _module->getContext();
 		llvm::IRBuilder<> builder(ctx);
@@ -161,13 +171,9 @@ llvm::Function* getCallFunc(llvm::Module* _module)
 
 		builder.SetInsertPoint(entryBB);
 		auto v = builder.CreateAlloca(Type::Word);
-		auto addr = builder.CreateAlloca(Type::Word);
+		auto addrAlloca = builder.CreateAlloca(Type::Word);
 		auto queryFn = getQueryFunc(_module);
-		auto undef = llvm::UndefValue::get(Type::WordPtr);
-		builder.CreateCall(queryFn, {v, &env, builder.getInt32(EVM_CALL_DEPTH), undef});
-		auto depthPtr = builder.CreateBitCast(v, builder.getInt64Ty()->getPointerTo());
-		auto depth = builder.CreateLoad(depthPtr);
-		auto depthOk = builder.CreateICmpSLT(depth, builder.getInt64(1024));
+		auto depthOk = builder.CreateICmpSLT(&depth, builder.getInt64(1024));
 		builder.CreateCondBr(depthOk, checkTransferBB, failBB);
 
 		builder.SetInsertPoint(checkTransferBB);
@@ -178,8 +184,8 @@ llvm::Function* getCallFunc(llvm::Module* _module)
 		builder.CreateCondBr(transfer, checkBalanceBB, callBB);
 
 		builder.SetInsertPoint(checkBalanceBB);
-		builder.CreateCall(queryFn, {addr, &env, builder.getInt32(EVM_ADDRESS), undef});
-		builder.CreateCall(queryFn, {v, &env, builder.getInt32(EVM_BALANCE), addr});
+		builder.CreateStore(&addr, addrAlloca);
+		builder.CreateCall(queryFn, {v, &env, builder.getInt32(EVM_BALANCE), addrAlloca});
 		llvm::Value* balance = builder.CreateLoad(v);
 		balance = Endianness::toNative(builder, balance);
 		value = Endianness::toNative(builder, value);
@@ -187,9 +193,10 @@ llvm::Function* getCallFunc(llvm::Module* _module)
 		builder.CreateCondBr(balanceOk, callBB, failBB);
 
 		builder.SetInsertPoint(callBB);
+		// Pass the first 9 args to the external call.
 		llvm::Value* args[9];
-		auto outIt = std::begin(args);
-		for (auto it = func->arg_begin(); it != func->arg_end(); ++it, ++outIt)
+		auto it = func->arg_begin();
+		for (auto outIt = std::begin(args); outIt != std::end(args); ++it, ++outIt)
 			*outIt = &*it;
 		auto ret = builder.CreateCall(callFunc, args);
 		builder.CreateRet(ret);
@@ -324,8 +331,6 @@ llvm::Value* Ext::query(evm_query_key _key)
 	case EVM_DIFFICULTY:
 		v = Endianness::toNative(m_builder, v);
 		break;
-	case EVM_ADDRESS:
-	case EVM_CALLER:
 	case EVM_ORIGIN:
 	case EVM_COINBASE:
 	{
@@ -481,7 +486,8 @@ llvm::Value* Ext::call(evm_call_kind _kind,
 	auto func = getCallFunc(getModule());
 	return createCABICall(
 		func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(_kind), gas,
-			   addr, value, inData, inSize, outData, outSize});
+			   addr, value, inData, inSize, outData, outSize,
+			   getRuntimeManager().getAddress(), getRuntimeManager().getDepth()});
 }
 
 std::tuple<llvm::Value*, llvm::Value*> Ext::create(llvm::Value* _gas,
@@ -501,7 +507,8 @@ std::tuple<llvm::Value*, llvm::Value*> Ext::create(llvm::Value* _gas,
 	auto ret = createCABICall(
 		func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_CREATE),
 			   _gas, llvm::UndefValue::get(addrTy), value, inData, inSize, pAddr,
-			   m_builder.getInt64(20)});
+			   m_builder.getInt64(20),
+			   getRuntimeManager().getAddress(), getRuntimeManager().getDepth()});
 
 	pAddr = m_builder.CreateBitCast(pAddr, addrTy->getPointerTo());
 	return std::tuple<llvm::Value*, llvm::Value*>{ret, pAddr};

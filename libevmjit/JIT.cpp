@@ -312,6 +312,11 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 	rt.callData = message.input;
 	rt.callDataSize = message.input_size;
 	std::memcpy(&rt.apparentValue, &message.value, sizeof(message.value));
+	std::memset(&rt.address, 0, 12);
+	std::memcpy(&rt.address[12], &message.address, sizeof(message.address));
+	std::memset(&rt.caller, 0, 12);
+	std::memcpy(&rt.caller[12], &message.sender, sizeof(message.sender));
+	rt.depth = message.depth;
 
 	ExecutionContext ctx{rt, env};
 

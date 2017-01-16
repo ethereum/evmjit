@@ -620,10 +620,10 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 		}
 
 		case Instruction::ADDRESS:
-			stack.push(_ext.query(EVM_ADDRESS));
+			stack.push(Endianness::toNative(m_builder, _runtimeManager.getAddress()));
 			break;
 		case Instruction::CALLER:
-			stack.push(_ext.query(EVM_CALLER));
+			stack.push(Endianness::toNative(m_builder, _runtimeManager.getSender()));
 			break;
 		case Instruction::ORIGIN:
 			stack.push(_ext.query(EVM_ORIGIN));
@@ -889,7 +889,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 				auto noPenaltyCond = destExists;
 				if (m_mode >= EVM_CLEARING)
 				{
-					auto addr = _ext.query(EVM_ADDRESS);
+					auto addr = Endianness::toNative(m_builder, _runtimeManager.getAddress());
 					auto balance = _ext.balance(addr);
 					auto noTransfer = m_builder.CreateICmpEQ(balance,
 					                                         Constant::get(0));

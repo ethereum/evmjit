@@ -29,6 +29,9 @@ llvm::StructType* RuntimeManager::getRuntimeDataType()
 			Type::Word,		// apparentValue
 			Type::BytePtr,	// code
 			Type::Size,		// codeSize
+			Type::Word,     // adddress
+			Type::Word,     // caller
+			Type::Size,     // depth
 		};
 		type = llvm::StructType::create(elems, "RuntimeData");
 	}
@@ -65,6 +68,9 @@ llvm::Twine getName(RuntimeData::Index _index)
 	case RuntimeData::ApparentCallValue:	return "msg.value";
 	case RuntimeData::Code:			return "code.ptr";
 	case RuntimeData::CodeSize:		return "code.size";
+	case RuntimeData::Address:      return "msg.address";
+	case RuntimeData::Caller:       return "msg.caller";
+	case RuntimeData::Depth:        return "msg.depth";
 	}
 }
 }
@@ -148,9 +154,24 @@ llvm::Value* RuntimeManager::getPtr(RuntimeData::Index _index)
 	return ptr;
 }
 
+llvm::Value* RuntimeManager::getAddress()
+{
+	return m_dataElts[RuntimeData::Address];
+}
+
+llvm::Value* RuntimeManager::getSender()
+{
+	return m_dataElts[RuntimeData::Caller];
+}
+
 llvm::Value* RuntimeManager::getValue()
 {
 	return m_dataElts[RuntimeData::ApparentCallValue];
+}
+
+llvm::Value* RuntimeManager::getDepth()
+{
+	return m_dataElts[RuntimeData::Depth];
 }
 
 void RuntimeManager::set(RuntimeData::Index _index, llvm::Value* _value)
