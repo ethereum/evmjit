@@ -52,6 +52,9 @@ public:
 
 	static llvm::StructType* getRuntimeType();
 	static llvm::StructType* getRuntimeDataType();
+	llvm::StructType* getTxContextType();
+
+	llvm::Value* getTxContextItem(unsigned _index);
 
 	//TODO Move to schedule
 	static const size_t stackSizeLimit = 1024;
@@ -65,6 +68,10 @@ private:
 	llvm::Value* m_gasPtr = nullptr;
 	llvm::Value* m_memPtr = nullptr;
 	llvm::Value* m_envPtr = nullptr;
+
+	llvm::Value* m_txCtxLoaded = nullptr;
+	llvm::Value* m_txCtx = nullptr;
+	llvm::Function* m_loadTxCtxFn = nullptr;
 
 	std::array<llvm::Value*, RuntimeData::numElements> m_dataElts;
 

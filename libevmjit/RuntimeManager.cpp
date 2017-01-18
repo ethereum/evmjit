@@ -54,6 +54,34 @@ llvm::StructType* RuntimeManager::getRuntimeType()
 	return type;
 }
 
+llvm::StructType* RuntimeManager::getTxContextType()
+{
+	auto name = "evm.txctx";
+	auto type = getModule()->getTypeByName(name);
+	if (type)
+		return type;
+
+	auto& ctx = getModule()->getContext();
+	auto i256 = llvm::IntegerType::get(ctx, 256);
+	auto h160 = llvm::ArrayType::get(llvm::IntegerType::get(ctx, 8), 20);
+	auto i64  = llvm::IntegerType::get(ctx, 64);
+	return llvm::StructType::create({i256, h160, h160, i64, i64, i64, i256}, name);
+}
+
+llvm::Value* RuntimeManager::getTxContextItem(unsigned _index)
+{
+	auto call = m_builder.CreateCall(m_loadTxCtxFn, {m_txCtxLoaded, m_txCtx, m_envPtr});
+	call->setCallingConv(llvm::CallingConv::Fast);
+	auto ptr = m_builder.CreateStructGEP(getTxContextType(), m_txCtx, _index);
+	if (_index == 1 || _index == 2)
+	{
+		// In struct addresses are represented as char[20] to fix alignment
+		// issues (i160 has alignment of 8). Here we convert them back to i160.
+		ptr = m_builder.CreateBitCast(ptr, m_builder.getIntNTy(160)->getPointerTo());
+	}
+	return m_builder.CreateLoad(ptr);
+}
+
 namespace
 {
 llvm::Twine getName(RuntimeData::Index _index)
@@ -80,6 +108,37 @@ RuntimeManager::RuntimeManager(IRBuilder& _builder, code_iterator _codeBegin, co
 	m_codeBegin(_codeBegin),
 	m_codeEnd(_codeEnd)
 {
+	m_txCtxLoaded = m_builder.CreateAlloca(m_builder.getInt1Ty(), nullptr, "txctx.loaded");
+	m_builder.CreateStore(m_builder.getInt1(false), m_txCtxLoaded);
+	m_txCtx = m_builder.CreateAlloca(getTxContextType(), nullptr, "txctx");
+
+	auto getTxCtxFnTy = llvm::FunctionType::get(Type::Void, {m_txCtx->getType(), Type::EnvPtr}, false);
+	auto getTxCtxFn = llvm::Function::Create(getTxCtxFnTy, llvm::Function::ExternalLinkage, "evm.get_tx_context", getModule());
+	auto loadTxCtxFnTy = llvm::FunctionType::get(Type::Void, {m_txCtxLoaded->getType(), m_txCtx->getType(), Type::EnvPtr}, false);
+	m_loadTxCtxFn = llvm::Function::Create(loadTxCtxFnTy, llvm::Function::PrivateLinkage, "loadTxCtx", getModule());
+	m_loadTxCtxFn->setCallingConv(llvm::CallingConv::Fast);
+	auto checkBB = llvm::BasicBlock::Create(m_loadTxCtxFn->getContext(), "Check", m_loadTxCtxFn);
+	auto loadBB = llvm::BasicBlock::Create(m_loadTxCtxFn->getContext(), "Load", m_loadTxCtxFn);
+	auto exitBB = llvm::BasicBlock::Create(m_loadTxCtxFn->getContext(), "Exit", m_loadTxCtxFn);
+
+	auto iter = m_loadTxCtxFn->arg_begin();
+	llvm::Argument* flag = &(*iter++);
+	flag->setName("flag");
+	llvm::Argument* txCtx = &(*iter++);
+	txCtx->setName("txctx");
+	llvm::Argument* env = &(*iter);
+	env->setName("env");
+
+	auto b = IRBuilder{checkBB};
+	auto f = b.CreateLoad(flag);
+	b.CreateCondBr(f, exitBB, loadBB);
+	b.SetInsertPoint(loadBB);
+	b.CreateStore(b.getInt1(true), flag);
+	b.CreateCall(getTxCtxFn, {txCtx, env});
+	b.CreateBr(exitBB);
+	b.SetInsertPoint(exitBB);
+	b.CreateRetVoid();
+
 	// Unpack data
 	auto rtPtr = getRuntimePtr();
 	m_dataPtr = m_builder.CreateLoad(m_builder.CreateStructGEP(getRuntimeType(), rtPtr, 0), "dataPtr");

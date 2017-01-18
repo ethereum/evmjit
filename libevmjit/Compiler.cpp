@@ -626,30 +626,30 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			stack.push(Endianness::toNative(m_builder, _runtimeManager.getSender()));
 			break;
 		case Instruction::ORIGIN:
-			stack.push(_ext.query(EVM_ORIGIN));
+			stack.push(m_builder.CreateZExt(Endianness::toNative(m_builder, _runtimeManager.getTxContextItem(1)), Type::Word));
 			break;
 		case Instruction::COINBASE:
-			stack.push(_ext.query(EVM_COINBASE));
+			stack.push(m_builder.CreateZExt(Endianness::toNative(m_builder, _runtimeManager.getTxContextItem(2)), Type::Word));
 			break;
 
 		case Instruction::GASPRICE:
-			stack.push(_ext.query(EVM_GAS_PRICE));
+			stack.push(Endianness::toNative(m_builder, _runtimeManager.getTxContextItem(0)));
 			break;
 
 		case Instruction::DIFFICULTY:
-			stack.push(_ext.query(EVM_DIFFICULTY));
+			stack.push(Endianness::toNative(m_builder, _runtimeManager.getTxContextItem(6)));
 			break;
 
 		case Instruction::GASLIMIT:
-			stack.push(_ext.query(EVM_GAS_LIMIT));
+			stack.push(m_builder.CreateZExt(_runtimeManager.getTxContextItem(5), Type::Word));
 			break;
 
 		case Instruction::NUMBER:
-			stack.push(_ext.query(EVM_NUMBER));
+			stack.push(m_builder.CreateZExt(_runtimeManager.getTxContextItem(3), Type::Word));
 			break;
 
 		case Instruction::TIMESTAMP:
-			stack.push(_ext.query(EVM_TIMESTAMP));
+			stack.push(m_builder.CreateZExt(_runtimeManager.getTxContextItem(4), Type::Word));
 			break;
 
 		case Instruction::CALLVALUE:
