@@ -323,38 +323,7 @@ llvm::Value* Ext::query(evm_query_key _key)
 	auto undef = llvm::UndefValue::get(Type::WordPtr);
 	auto pResult = getArgAlloca();
 	createCABICall(func, {pResult, getRuntimeManager().getEnvPtr(), m_builder.getInt32(_key), undef});
-	llvm::Value* v = m_builder.CreateLoad(pResult);
-
-	switch (_key)
-	{
-	case EVM_GAS_PRICE:
-	case EVM_DIFFICULTY:
-		v = Endianness::toNative(m_builder, v);
-		break;
-	case EVM_ORIGIN:
-	case EVM_COINBASE:
-	{
-		auto mask160 = llvm::APInt(160, -1, true).zext(256);
-		v = Endianness::toNative(m_builder, v);
-		v = m_builder.CreateAnd(v, mask160);
-		break;
-	}
-	case EVM_GAS_LIMIT:
-	case EVM_NUMBER:
-	case EVM_TIMESTAMP:
-	{
-		// Use only 64-bit -- single word. The rest is uninitialized.
-		// We could have mask 63 bits, but there is very little to gain in cost
-		// of additional and operation.
-		auto mask64 = llvm::APInt(256, std::numeric_limits<uint64_t>::max());
-		v = m_builder.CreateAnd(v, mask64);
-		break;
-	}
-	default:
-		break;
-	}
-
-	return v;
+	return m_builder.CreateLoad(pResult);
 }
 
 llvm::Value* Ext::balance(llvm::Value* _address)
