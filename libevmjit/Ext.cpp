@@ -208,6 +208,22 @@ llvm::Function* getCallFunc(llvm::Module* _module)
 	return func;
 }
 
+llvm::Function* getBlockHashFunc(llvm::Module* _module)
+{
+	static const auto funcName = "evm.blockhash";
+	auto func = _module->getFunction(funcName);
+	if (!func)
+	{
+		// TODO: Mark the function as pure to eliminate multiple calls.
+		auto i64 = llvm::IntegerType::getInt64Ty(_module->getContext());
+		auto fty = llvm::FunctionType::get(Type::Void, {Type::WordPtr, Type::EnvPtr, i64}, false);
+		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, _module);
+		func->addAttribute(1, llvm::Attribute::NoAlias);
+		func->addAttribute(1, llvm::Attribute::NoCapture);
+	}
+	return func;
+}
+
 }
 
 
@@ -346,11 +362,10 @@ llvm::Value* Ext::exists(llvm::Value* _address)
 
 llvm::Value* Ext::blockHash(llvm::Value* _number)
 {
-	auto func = getQueryFunc(getModule());
-	// TODO: We can explicitly trunc the number to i64. The optimizer will know
-	//       that we care only about these 64 bit, not all 256.
+	auto func = getBlockHashFunc(getModule());
+	auto number = m_builder.CreateTrunc(_number, m_builder.getInt64Ty());
 	auto pResult = getArgAlloca();
-	createCABICall(func, {pResult, getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_BLOCKHASH), _number});
+	createCABICall(func, {pResult, getRuntimeManager().getEnvPtr(), number});
 	return Endianness::toNative(m_builder, m_builder.CreateLoad(pResult));
 }
 
