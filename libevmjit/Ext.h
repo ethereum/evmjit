@@ -48,7 +48,6 @@ public:
 	llvm::Value* sload(llvm::Value* _index);
 	void sstore(llvm::Value* _index, llvm::Value* _value);
 
-	llvm::Value* query(evm_query_key _key);
 	llvm::Value* balance(llvm::Value* _address);
 	llvm::Value* exists(llvm::Value* _address);
 	llvm::Value* calldataload(llvm::Value* _index);
@@ -86,7 +85,6 @@ private:
 
 	llvm::CallInst* createCall(EnvFunc _funcId, std::initializer_list<llvm::Value*> const& _args);
 	llvm::Value* getArgAlloca();
-	llvm::Value* byPtr(llvm::Value* _value);
 
 	llvm::Value* createCABICall(llvm::Function* _func,
 	                            std::initializer_list<llvm::Value*> const& _args);
