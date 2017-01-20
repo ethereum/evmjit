@@ -105,7 +105,7 @@ void parseOptions()
 	cl::ParseEnvironmentOptions("evmjit", "EVMJIT", "Ethereum EVM JIT Compiler");
 }
 
-class JITImpl
+class JITImpl: public evm_instance
 {
 	std::unique_ptr<llvm::ExecutionEngine> m_engine;
 	mutable std::mutex x_codeMap;
@@ -198,42 +198,7 @@ class SymbolResolver : public llvm::SectionMemoryManager
 };
 
 
-JITImpl::JITImpl()
-{
-	parseOptions();
 
-	bool preloadCache = g_cache == CacheMode::preload;
-	if (preloadCache)
-		g_cache = CacheMode::on;
-
-	llvm::InitializeNativeTarget();
-	llvm::InitializeNativeTargetAsmPrinter();
-
-	auto module = llvm::make_unique<llvm::Module>("", getLLVMContext());
-
-	// FIXME: LLVM 3.7: test on Windows
-	auto triple = llvm::Triple(llvm::sys::getProcessTriple());
-	if (triple.getOS() == llvm::Triple::OSType::Win32)
-		triple.setObjectFormat(llvm::Triple::ObjectFormatType::ELF);  // MCJIT does not support COFF format
-	module->setTargetTriple(triple.str());
-
-	llvm::EngineBuilder builder(std::move(module));
-	builder.setEngineKind(llvm::EngineKind::JIT);
-	builder.setMCJITMemoryManager(llvm::make_unique<SymbolResolver>());
-	builder.setOptLevel(g_optimize ? llvm::CodeGenOpt::Default : llvm::CodeGenOpt::None);
-	#ifndef NDEBUG
-	builder.setVerifyModules(true);
-	#endif
-
-	m_engine.reset(builder.create());
-
-	// TODO: Update cache listener
-	m_engine->setObjectCache(Cache::init(g_cache, nullptr));
-
-	// FIXME: Disabled during API changes
-	//if (preloadCache)
-	//	Cache::preload(*m_engine, funcCache);
-}
 
 ExecFunc JITImpl::getExecFunc(std::string const& _codeIdentifier) const
 {
@@ -315,7 +280,7 @@ static evm_instance* create(evm_query_fn queryFn, evm_update_fn updateFn,
 	jit.queryFn = queryFn;
 	jit.updateFn = updateFn;
 	jit.callFn = callFn;
-	return reinterpret_cast<evm_instance*>(&jit);
+	return &jit;
 }
 
 static void destroy(evm_instance* instance)
@@ -351,6 +316,7 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 	result.gas_left = 0;
 	result.output_data = nullptr;
 	result.output_size = 0;
+	result.error_message = nullptr;
 	result.internal_memory = nullptr;
 	result.release = release_result;
 
@@ -420,12 +386,54 @@ static void prepare_code(evm_instance* instance, evm_mode mode,
 		jit.mapExecFunc(codeIdentifier, execFunc);
 }
 
-EXPORT evm_interface evmjit_get_interface()
+EXPORT evm_factory evmjit_get_factory()
 {
-	return {EVM_ABI_VERSION, create, destroy, execute,
-			get_code_status, prepare_code, set_option};
+	return {EVM_ABI_VERSION, create};
 }
 
 }  // extern "C"
+
+JITImpl::JITImpl():
+		evm_instance({evmjit::destroy,
+		              evmjit::execute,
+		              evmjit::get_code_status,
+		              evmjit::prepare_code,
+		              evmjit::set_option})
+{
+	parseOptions();
+
+	bool preloadCache = g_cache == CacheMode::preload;
+	if (preloadCache)
+		g_cache = CacheMode::on;
+
+	llvm::InitializeNativeTarget();
+	llvm::InitializeNativeTargetAsmPrinter();
+
+	auto module = llvm::make_unique<llvm::Module>("", getLLVMContext());
+
+	// FIXME: LLVM 3.7: test on Windows
+	auto triple = llvm::Triple(llvm::sys::getProcessTriple());
+	if (triple.getOS() == llvm::Triple::OSType::Win32)
+		triple.setObjectFormat(llvm::Triple::ObjectFormatType::ELF);  // MCJIT does not support COFF format
+	module->setTargetTriple(triple.str());
+
+	llvm::EngineBuilder builder(std::move(module));
+	builder.setEngineKind(llvm::EngineKind::JIT);
+	builder.setMCJITMemoryManager(llvm::make_unique<SymbolResolver>());
+	builder.setOptLevel(g_optimize ? llvm::CodeGenOpt::Default : llvm::CodeGenOpt::None);
+#ifndef NDEBUG
+	builder.setVerifyModules(true);
+#endif
+
+	m_engine.reset(builder.create());
+
+	// TODO: Update cache listener
+	m_engine->setObjectCache(Cache::init(g_cache, nullptr));
+
+	// FIXME: Disabled during API changes
+	//if (preloadCache)
+	//	Cache::preload(*m_engine, funcCache);
+}
+
 }
 }
