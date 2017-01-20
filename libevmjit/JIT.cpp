@@ -140,7 +140,7 @@ public:
 	ExecFunc compile(evm_mode _mode, byte const* _code, uint64_t _codeSize, std::string const& _codeIdentifier);
 
 	evm_query_state_fn queryFn = nullptr;
-	evm_update_fn updateFn = nullptr;
+	evm_update_state_fn updateFn = nullptr;
 	evm_call_fn callFn = nullptr;
 	evm_get_tx_context_fn getTxContextFn = nullptr;
 	evm_get_block_hash_fn getBlockHashFn = nullptr;
@@ -277,7 +277,7 @@ bytes_ref ExecutionContext::getReturnData() const
 extern "C"
 {
 
-static evm_instance* create(evm_query_state_fn queryFn, evm_update_fn updateFn,
+static evm_instance* create(evm_query_state_fn queryFn, evm_update_state_fn updateFn,
 	evm_call_fn callFn, evm_get_tx_context_fn getTxContextFn,
 	evm_get_block_hash_fn getBlockHashFn)
 {
