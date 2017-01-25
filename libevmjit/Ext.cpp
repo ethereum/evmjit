@@ -290,9 +290,9 @@ llvm::Value* Ext::sload(llvm::Value* _index)
 {
 	auto index = Endianness::toBE(m_builder, _index);
 	auto addrTy = m_builder.getIntNTy(160);
-	auto address = m_builder.CreateTrunc(Endianness::toBE(m_builder, getRuntimeManager().getAddress()), addrTy);
+	auto myAddr = Endianness::toBE(m_builder, m_builder.CreateTrunc(Endianness::toNative(m_builder, getRuntimeManager().getAddress()), addrTy));
 	auto pAddr = m_builder.CreateBitCast(getArgAlloca(), addrTy->getPointerTo());
-	m_builder.CreateStore(address, pAddr);
+	m_builder.CreateStore(myAddr, pAddr);
 	auto func = getQueryFunc(getModule());
 	auto pValue = getArgAlloca();
 	createCABICall(func, {pValue, getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_SLOAD), pAddr, index});
