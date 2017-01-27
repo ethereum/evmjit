@@ -1,5 +1,6 @@
 #include "JIT.h"
 
+#include <cstddef>
 #include <mutex>
 
 #include "preprocessor/llvm_includes_start.h"
@@ -25,7 +26,8 @@
 static_assert(sizeof(evm_uint256be) == 32, "evm_uint256be is too big");
 static_assert(sizeof(evm_uint160be) == 20, "evm_uint160be is too big");
 static_assert(sizeof(evm_result) <= 64, "evm_result does not fit cache line");
-static_assert(sizeof(evm_message) <= 13*8, "evm_message not optimally packed");
+static_assert(sizeof(evm_message) <= 17*8, "evm_message not optimally packed");
+static_assert(offsetof(evm_message, code_hash) % 8 == 0, "evm_message.code_hash not aligned");
 
 // Check enums match int size.
 // On GCC/clang the underlying type should be unsigned int, on MSVC int
@@ -307,23 +309,22 @@ static void releaseResult(evm_result const* result)
 }
 
 static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
-	evm_uint256be code_hash, uint8_t const* code, size_t code_size,
-	evm_message message)
+	evm_message const* msg, uint8_t const* code, size_t code_size)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
 
 	RuntimeData rt;
 	rt.code = code;
 	rt.codeSize = code_size;
-	rt.gas = message.gas;
-	rt.callData = message.input;
-	rt.callDataSize = message.input_size;
-	std::memcpy(&rt.apparentValue, &message.value, sizeof(message.value));
+	rt.gas = msg->gas;
+	rt.callData = msg->input;
+	rt.callDataSize = msg->input_size;
+	std::memcpy(&rt.apparentValue, &msg->value, sizeof(msg->value));
 	std::memset(&rt.address, 0, 12);
-	std::memcpy(&rt.address[12], &message.address, sizeof(message.address));
+	std::memcpy(&rt.address[12], &msg->address, sizeof(msg->address));
 	std::memset(&rt.caller, 0, 12);
-	std::memcpy(&rt.caller[12], &message.sender, sizeof(message.sender));
-	rt.depth = message.depth;
+	std::memcpy(&rt.caller[12], &msg->sender, sizeof(msg->sender));
+	rt.depth = msg->depth;
 
 	ExecutionContext ctx{rt, env};
 
@@ -335,7 +336,7 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 	result.context = nullptr;
 	result.release = releaseResult;
 
-	auto codeIdentifier = makeCodeId(code_hash, mode);
+	auto codeIdentifier = makeCodeId(msg->code_hash, mode);
 	auto execFunc = jit.getExecFunc(codeIdentifier);
 	if (!execFunc)
 	{
