@@ -10,9 +10,6 @@
 #include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #include <llvm/Support/TargetSelect.h>
-#include <llvm/Support/Host.h>
-#include <llvm/Support/CommandLine.h>
-#include <llvm/Support/ManagedStatic.h>
 #include "preprocessor/llvm_includes_end.h"
 
 #include "Compiler.h"
@@ -148,6 +145,22 @@ public:
 	evm_get_block_hash_fn getBlockHashFn = nullptr;
 };
 
+static int64_t call_v2(
+	evm_env* _opaqueEnv,
+	evm_call_kind _kind,
+	int64_t _gas,
+	evm_uint160be const* _address,
+	evm_uint256be const* _value,
+	uint8_t const* _inputData,
+	size_t _inputSize,
+	uint8_t* _outputData,
+	size_t _outputSize
+) noexcept
+{
+	return JITImpl::instance().callFn(_opaqueEnv, _kind, _gas, _address, _value,
+		_inputData, _inputSize, _outputData, _outputSize);
+}
+
 
 class SymbolResolver : public llvm::SectionMemoryManager
 {
@@ -158,7 +171,7 @@ class SymbolResolver : public llvm::SectionMemoryManager
 			.Case("env_sha3", reinterpret_cast<uint64_t>(&keccak))
 			.Case("evm.query", reinterpret_cast<uint64_t>(jit.queryFn))
 			.Case("evm.update", reinterpret_cast<uint64_t>(jit.updateFn))
-			.Case("evm.call", reinterpret_cast<uint64_t>(jit.callFn))
+			.Case("evm.call", reinterpret_cast<uint64_t>(call_v2))
 			.Case("evm.get_tx_context", reinterpret_cast<uint64_t>(jit.getTxContextFn))
 			.Case("evm.blockhash", reinterpret_cast<uint64_t>(jit.getBlockHashFn))
 			.Default(0);
@@ -272,7 +285,7 @@ bytes_ref ExecutionContext::getReturnData() const
 		return {};
 	}
 
-	return bytes_ref{data, size};
+	return {data, size};
 }
 
 
