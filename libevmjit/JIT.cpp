@@ -143,6 +143,8 @@ public:
 	evm_call_fn callFn = nullptr;
 	evm_get_tx_context_fn getTxContextFn = nullptr;
 	evm_get_block_hash_fn getBlockHashFn = nullptr;
+
+	evm_message const* currentMsg = nullptr;
 };
 
 static int64_t call_v2(
@@ -157,8 +159,18 @@ static int64_t call_v2(
 	size_t _outputSize
 ) noexcept
 {
-	return JITImpl::instance().callFn(_opaqueEnv, _kind, _gas, _address, _value,
-		_inputData, _inputSize, _outputData, _outputSize);
+	auto& jit = JITImpl::instance();
+	evm_message msg;
+	msg.kind = _kind;
+	msg.address = *_address;
+	msg.sender = _kind != EVM_DELEGATECALL ? jit.currentMsg->address : jit.currentMsg->sender;
+	msg.value = _kind != EVM_DELEGATECALL ? *_value : jit.currentMsg->value;
+	msg.input = _inputData;
+	msg.input_size = _inputSize;
+	msg.gas = _gas;
+	msg.depth = jit.currentMsg->depth + 1;
+	// FIXME: Handle code hash.
+	return jit.callFn(_opaqueEnv, &msg, _outputData, _outputSize);
 }
 
 
@@ -326,6 +338,10 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
 
+	// TODO: Temporary keep track of the current message.
+	evm_message const* prevMsg = jit.currentMsg;
+	jit.currentMsg = msg;
+
 	RuntimeData rt;
 	rt.code = code;
 	rt.codeSize = code_size;
@@ -389,6 +405,7 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 	result.context = ctx.m_memData;
 	ctx.m_memData = nullptr;
 
+	jit.currentMsg = prevMsg;
 	return result;
 }
 
