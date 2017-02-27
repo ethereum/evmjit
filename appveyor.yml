@@ -6,7 +6,8 @@ configuration:
   - Debug
   - Release
 cache:
-  - build/llvm -> cmake/llvm.cmake
+  - build/deps/downloads
+  - build/deps/llvm -> cmake/llvm.cmake
 before_build: |
   if not exist build mkdir build
   cd build

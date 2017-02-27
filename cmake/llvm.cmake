@@ -59,12 +59,14 @@ function(configure_llvm_project TARGET_NAME)
             set(BUILD_COMMAND cmake --build <BINARY_DIR> --config Release)
         endif()
 
+        set(DEPS_DIR ${CMAKE_SOURCE_DIR}/deps)
+
         include(ExternalProject)
         ExternalProject_Add(llvm-project
-            PREFIX llvm
-            DOWNLOAD_DIR ${CMAKE_CURRENT_LIST_DIR}/downloads
-            BINARY_DIR llvm  # Build directly to install dir to avoid copy.
-            SOURCE_DIR llvm/src/llvm
+            PREFIX ${DEPS_DIR}/llvm
+            DOWNLOAD_DIR ${DEPS_DIR}/downloads
+            DOWNLOAD_NO_PROGRESS 1
+            BINARY_DIR ${DEPS_DIR}/llvm  # Build directly to install dir to avoid copy.
             URL http://llvm.org/releases/3.9.1/llvm-3.9.1.src.tar.xz
             URL_HASH SHA256=1fd90354b9cf19232e8f168faf2220e79be555df3aa743242700879e8fd329ee
             CMAKE_ARGS -DCMAKE_BUILD_TYPE=Release

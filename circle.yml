@@ -3,8 +3,7 @@ dependencies:
     - scripts/install_cmake.sh
     - PATH=~/.local/bin:$PATH BUILD_TYPE=RelWithDebInfo scripts/build.sh
   cache_directories:
-    # TODO: add ccache
-    - build/llvm  # Cache llvm build
+    - deps  # Cache llvm build
     - ~/.local
 
 test:
