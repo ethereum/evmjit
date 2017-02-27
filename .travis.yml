@@ -16,8 +16,8 @@ env:
     - BUILD_TYPE=Debug
 cache:
   ccache: true
-  directories: build/llvm
-
+  directories:
+  - deps
 
 script:
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then scripts/install_cmake.sh; fi
