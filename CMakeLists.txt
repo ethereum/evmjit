@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0.0)
+cmake_minimum_required(VERSION 3.4.0)
 
 cmake_policy(SET CMP0042 OLD)	# Fix MACOSX_RPATH.
 cmake_policy(SET CMP0048 NEW)	# Allow VERSION argument in project().
@@ -7,6 +7,8 @@ if (POLICY CMP0054)
 endif()
 
 project(EVMJIT VERSION 0.9.0.2 LANGUAGES CXX C)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
 message(STATUS "EVM JIT ${EVMJIT_VERSION_MAJOR}.${EVMJIT_VERSION_MINOR}.${EVMJIT_VERSION_PATCH}")
 
@@ -38,8 +40,8 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT SANITIZE)
 	set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-undefined")
 endif()
 
-include(cmake/llvm.cmake)
-configure_llvm_project(llvm)
+include(ProjectLLVM)
+configure_llvm_project()
 
 add_subdirectory(libevmjit)
 

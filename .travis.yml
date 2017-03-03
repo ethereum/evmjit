@@ -17,7 +17,7 @@ env:
 cache:
   ccache: true
   directories:
-  - deps
+  - $TRAVIS_BUILD_DIR/deps
 
 script:
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then scripts/install_cmake.sh; fi
