@@ -44,23 +44,23 @@ configure_file(BuildInfo.h.in ${CMAKE_CURRENT_BINARY_DIR}/gen/BuildInfo.gen.h)
 # "Object" library to allow building both static and shared libraries.
 add_library(evmjit-objs OBJECT ${SOURCES} gen/BuildInfo.gen.h)
 # Explicit dependency on llvm to download LLVM header files.
-add_dependencies(evmjit-objs llvm)
+add_dependencies(evmjit-objs LLVM::JIT)
 # PIC is required by shared libraries. We want it in the static library as well,
 # because it is going to be used to create e.g. Python modules (shared libraries).
 set_target_properties(evmjit-objs PROPERTIES POSITION_INDEPENDENT_CODE On)
 target_compile_definitions(evmjit-objs PRIVATE evmjit_EXPORTS)
-get_target_property(LLVM_COMPILE_DEFINITIONS llvm INTERFACE_COMPILE_DEFINITIONS)
+get_target_property(LLVM_COMPILE_DEFINITIONS LLVM::JIT INTERFACE_COMPILE_DEFINITIONS)
 if (LLVM_COMPILE_DEFINITIONS)
 	target_compile_definitions(evmjit-objs PRIVATE ${LLVM_COMPILE_DEFINITIONS})
 endif()
-get_target_property(LLVM_INCLUDE_DIRECTORIES llvm INTERFACE_INCLUDE_DIRECTORIES)
+get_target_property(LLVM_INCLUDE_DIRECTORIES LLVM::JIT INTERFACE_INCLUDE_DIRECTORIES)
 target_include_directories(evmjit-objs SYSTEM PRIVATE ${LLVM_INCLUDE_DIRECTORIES})
 target_include_directories(evmjit-objs PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/gen)
 target_include_directories(evmjit-objs PUBLIC ${EVMJIT_INCLUDE_DIR})
 
 # Static library.
 add_library(evmjit-static STATIC $<TARGET_OBJECTS:evmjit-objs>)
-target_link_libraries(evmjit-static PRIVATE llvm)
+target_link_libraries(evmjit-static PRIVATE LLVM::JIT)
 
 # Shared library.
 add_library(evmjit SHARED $<TARGET_OBJECTS:evmjit-objs>)
@@ -68,7 +68,7 @@ set_target_properties(evmjit PROPERTIES
 					  VERSION ${EVMJIT_VERSION}
 					  SOVERSION ${EVMJIT_SOVERSION}
 					  FOLDER "libs")
-target_link_libraries(evmjit PRIVATE llvm)
+target_link_libraries(evmjit PRIVATE LLVM::JIT)
 
 include(GNUInstallDirs)
 install(TARGETS evmjit
