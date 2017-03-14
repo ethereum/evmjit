@@ -6,7 +6,7 @@
 #ifdef evmjit_EXPORTS
 #define EXPORT __declspec(dllexport)
 #else
-#define EXPORT __declspec(dllimport)
+#define EXPORT
 #endif
 
 #else

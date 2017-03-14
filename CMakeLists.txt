@@ -20,7 +20,6 @@ option(EVMJIT_INCLUDE_EXAMPLES "Generate build targets for the EVMJIT examples" 
 option(EVMJIT_TESTS "Create targets for CTest" OFF)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-set(CMAKE_AUTOMOC OFF)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 	# Always use Release variant of C++ runtime.
