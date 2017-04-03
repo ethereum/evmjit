@@ -75,6 +75,7 @@ std::vector<BasicBlock> Compiler::createBasicBlocks(code_iterator _codeBegin, co
 		{
 		case Instruction::JUMP:
 		case Instruction::RETURN:
+		case Instruction::REVERT:
 		case Instruction::STOP:
 		case Instruction::SUICIDE:
 			isDead = true;
@@ -863,14 +864,19 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 		}
 
 		case Instruction::RETURN:
+		case Instruction::REVERT:
 		{
+			auto const isRevert = inst == Instruction::REVERT;
+			if (isRevert && m_mode < EVM_METROPOLIS)
+				goto invalidInstruction;
+
 			auto index = stack.pop();
 			auto size = stack.pop();
 
 			_memory.require(index, size);
 			_runtimeManager.registerReturnData(index, size);
 
-			_runtimeManager.exit(ReturnCode::Return);
+			_runtimeManager.exit(isRevert ? ReturnCode::Revert : ReturnCode::Return);
 			break;
 		}
 
@@ -924,6 +930,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			break;
 		}
 
+		invalidInstruction:
 		default: // Invalid instruction - abort
 			_runtimeManager.exit(ReturnCode::OutOfGas);
 			it = _basicBlock.end() - 1; // finish block compilation

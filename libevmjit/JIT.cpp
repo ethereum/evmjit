@@ -333,7 +333,12 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 
 	auto returnCode = execFunc(&ctx);
 
-	if (returnCode == ReturnCode::OutOfGas)
+	if (returnCode == ReturnCode::Revert)
+	{
+		result.code = EVM_REVERT;
+		result.gas_left = rt.gas;
+	}
+	else if (returnCode == ReturnCode::OutOfGas)
 	{
 		// EVMJIT does not provide information what exactly type of failure
 		// it was, so use generic EVM_FAILURE.
@@ -345,7 +350,7 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 		result.gas_left = rt.gas;
 	}
 
-	if (returnCode == ReturnCode::Return)
+	if (returnCode == ReturnCode::Return || returnCode == ReturnCode::Revert)
 	{
 		auto out = ctx.getReturnData();
 		result.output_data = std::get<0>(out);
