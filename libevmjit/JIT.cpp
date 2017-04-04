@@ -297,7 +297,7 @@ bytes_ref ExecutionContext::getReturnData() const
 		return {};
 	}
 
-	return {data, size};
+	return bytes_ref{data, size};
 }
 
 
