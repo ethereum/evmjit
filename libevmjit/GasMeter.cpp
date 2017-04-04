@@ -170,6 +170,7 @@ int64_t GasMeter::getStepCost(Instruction inst) const
 	// Tier 0
 	case Instruction::STOP:
 	case Instruction::RETURN:
+	case Instruction::REVERT:
 	case Instruction::SSTORE: // Handle cost of SSTORE separately in GasMeter::countSStore()
 		return JITSchedule::stepGas0::value;
 
