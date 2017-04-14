@@ -103,9 +103,10 @@ function(configure_llvm_project)
 
     # Create the target representing
     add_library(LLVM::JIT STATIC IMPORTED)
+    set_property(TARGET LLVM::JIT PROPERTY IMPORTED_CONFIGURATIONS Release)
+    set_property(TARGET LLVM::JIT PROPERTY IMPORTED_LOCATION_RELEASE ${MAIN_LIB})
     set_property(TARGET LLVM::JIT PROPERTY INTERFACE_COMPILE_DEFINITIONS ${DEFINES})
     set_property(TARGET LLVM::JIT PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${LLVM_INCLUDE_DIRS})
-    set_property(TARGET LLVM::JIT PROPERTY IMPORTED_LOCATION ${MAIN_LIB})
     set_property(TARGET LLVM::JIT PROPERTY INTERFACE_LINK_LIBRARIES ${LIBS})
     if (TARGET llvm)
         add_dependencies(LLVM::JIT llvm)
