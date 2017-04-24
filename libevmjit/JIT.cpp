@@ -317,7 +317,6 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 	result.gas_left = 0;
 	result.output_data = nullptr;
 	result.output_size = 0;
-	result.error_message = nullptr;
 	result.internal_memory = nullptr;
 	result.release = release_result;
 
