@@ -250,7 +250,7 @@ ExecFunc JITImpl::compile(evm_mode _mode, byte const* _code, uint64_t _codeSize,
 ExecutionContext::~ExecutionContext() noexcept
 {
 	if (m_memData)
-		std::free(m_memData); // Use helper free to check memory leaks
+		std::free(m_memData);
 }
 
 bytes_ref ExecutionContext::getReturnData() const
@@ -286,14 +286,16 @@ static evm_instance* create(evm_query_fn queryFn, evm_update_fn updateFn,
 
 static void destroy(evm_instance* instance)
 {
-    (void)instance;
+	(void)instance;
 	assert(instance == static_cast<void*>(&JITImpl::instance()));
 }
 
-static void release_result(evm_result const* result)
+static void releaseResult(evm_result const* result)
 {
-	if (result->internal_memory)
-		std::free(result->internal_memory);
+	// FIXME: We should make sure this function is called only if context
+	// is not null. Then we can remove the check.
+	if (result->context)
+		std::free(result->context);
 }
 
 static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
@@ -317,8 +319,8 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 	result.gas_left = 0;
 	result.output_data = nullptr;
 	result.output_size = 0;
-	result.internal_memory = nullptr;
-	result.release = release_result;
+	result.context = nullptr;
+	result.release = releaseResult;
 
 	auto codeIdentifier = makeCodeId(code_hash, mode);
 	auto execFunc = jit.getExecFunc(codeIdentifier);
@@ -357,7 +359,7 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 	}
 
 	// Take care of the internal memory.
-	result.internal_memory = ctx.m_memData;
+	result.context = ctx.m_memData;
 	ctx.m_memData = nullptr;
 
 	return result;
