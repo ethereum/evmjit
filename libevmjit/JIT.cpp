@@ -22,7 +22,7 @@
 
 static_assert(sizeof(evm_uint256be) == 32, "evm_uint256be is too big");
 static_assert(sizeof(evm_uint160be) == 20, "evm_uint160be is too big");
-static_assert(sizeof(evm_result) <= 64, "evm_result does not fit cache line");
+static_assert(sizeof(evm_result) == 64, "evm_result does not fit cache line");
 static_assert(sizeof(evm_message) <= 17*8, "evm_message not optimally packed");
 static_assert(offsetof(evm_message, code_hash) % 8 == 0, "evm_message.code_hash not aligned");
 
@@ -329,8 +329,8 @@ static void releaseResult(evm_result const* result)
 {
 	// FIXME: We should make sure this function is called only if context
 	// is not null. Then we can remove the check.
-	if (result->context)
-		std::free(result->context);
+	if (result->payload.pointer)
+		std::free(result->payload.pointer);
 }
 
 static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
@@ -362,7 +362,7 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 	result.gas_left = 0;
 	result.output_data = nullptr;
 	result.output_size = 0;
-	result.context = nullptr;
+	result.payload.pointer = nullptr;
 	result.release = releaseResult;
 
 	auto codeIdentifier = makeCodeId(msg->code_hash, mode);
@@ -402,7 +402,7 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 	}
 
 	// Take care of the internal memory.
-	result.context = ctx.m_memData;
+	result.payload.pointer = ctx.m_memData;
 	ctx.m_memData = nullptr;
 
 	jit.currentMsg = prevMsg;
