@@ -1,6 +1,9 @@
 #include <evm.h>
 
-int64_t test_call_failure_constant(int64_t a)
+evm_result test_call_failure(int64_t gas)
 {
-    return a | EVM_CALL_FAILURE;
+    evm_result result{};
+    result.code = EVM_FAILURE;
+    result.gas_left = gas;
+    return result;
 }

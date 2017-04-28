@@ -12,6 +12,7 @@
 #include <llvm/Support/TargetSelect.h>
 #include "preprocessor/llvm_includes_end.h"
 
+#include "Ext.h"
 #include "Compiler.h"
 #include "Optimizer.h"
 #include "Cache.h"
@@ -170,7 +171,20 @@ static int64_t call_v2(
 	msg.gas = _gas;
 	msg.depth = jit.currentMsg->depth + 1;
 	// FIXME: Handle code hash.
-	return jit.callFn(_opaqueEnv, &msg, _outputData, _outputSize);
+	evm_result result;
+	jit.callFn(&result, _opaqueEnv, &msg);
+	// FIXME: Clarify when gas_left is valid.
+	int64_t r = result.gas_left;
+	if (result.code == EVM_SUCCESS || result.code == EVM_REVERT)
+	{
+		auto size = std::min(_outputSize, result.output_size);
+		std::copy(result.output_data, result.output_data + size, _outputData);
+	}
+	if (result.code != EVM_SUCCESS)
+		r |= EVM_CALL_FAILURE;
+	if (result.release)
+		result.release(&result);
+	return r;
 }
 
 
