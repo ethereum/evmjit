@@ -32,11 +32,11 @@ struct RuntimeData
 		GasPrice,
 		CallData,
 		CallDataSize,
-		ApparentCallValue,		// value of msg.value - different during DELEGATECALL
+		Value,  // Value of msg.value - different during DELEGATECALL.
 		Code,
 		CodeSize,
 		Address,
-		Caller,
+		Sender,
 		Depth,
 
 		ReturnData 		   = CallData,		///< Return data pointer (set only in case of RETURN)

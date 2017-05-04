@@ -93,12 +93,12 @@ llvm::Twine getName(RuntimeData::Index _index)
 	case RuntimeData::GasPrice:		return "tx.gasprice";
 	case RuntimeData::CallData:		return "msg.data.ptr";
 	case RuntimeData::CallDataSize:	return "msg.data.size";
-	case RuntimeData::ApparentCallValue:	return "msg.value";
+	case RuntimeData::Value:		return "msg.value";
 	case RuntimeData::Code:			return "code.ptr";
 	case RuntimeData::CodeSize:		return "code.size";
-	case RuntimeData::Address:      return "msg.address";
-	case RuntimeData::Caller:       return "msg.caller";
-	case RuntimeData::Depth:        return "msg.depth";
+	case RuntimeData::Address:		return "msg.address";
+	case RuntimeData::Sender:		return "msg.sender";
+	case RuntimeData::Depth:		return "msg.depth";
 	}
 }
 }
@@ -220,12 +220,12 @@ llvm::Value* RuntimeManager::getAddress()
 
 llvm::Value* RuntimeManager::getSender()
 {
-	return m_dataElts[RuntimeData::Caller];
+	return m_dataElts[RuntimeData::Sender];
 }
 
 llvm::Value* RuntimeManager::getValue()
 {
-	return m_dataElts[RuntimeData::ApparentCallValue];
+	return m_dataElts[RuntimeData::Value];
 }
 
 llvm::Value* RuntimeManager::getDepth()
