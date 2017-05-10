@@ -620,36 +620,36 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 		}
 
 		case Instruction::ADDRESS:
-			stack.push(_ext.query(EVM_ADDRESS));
+			stack.push(Endianness::toNative(m_builder, _runtimeManager.getAddress()));
 			break;
 		case Instruction::CALLER:
-			stack.push(_ext.query(EVM_CALLER));
+			stack.push(Endianness::toNative(m_builder, _runtimeManager.getSender()));
 			break;
 		case Instruction::ORIGIN:
-			stack.push(_ext.query(EVM_ORIGIN));
+			stack.push(m_builder.CreateZExt(Endianness::toNative(m_builder, _runtimeManager.getTxContextItem(1)), Type::Word));
 			break;
 		case Instruction::COINBASE:
-			stack.push(_ext.query(EVM_COINBASE));
+			stack.push(m_builder.CreateZExt(Endianness::toNative(m_builder, _runtimeManager.getTxContextItem(2)), Type::Word));
 			break;
 
 		case Instruction::GASPRICE:
-			stack.push(_ext.query(EVM_GAS_PRICE));
+			stack.push(Endianness::toNative(m_builder, _runtimeManager.getTxContextItem(0)));
 			break;
 
 		case Instruction::DIFFICULTY:
-			stack.push(_ext.query(EVM_DIFFICULTY));
+			stack.push(Endianness::toNative(m_builder, _runtimeManager.getTxContextItem(6)));
 			break;
 
 		case Instruction::GASLIMIT:
-			stack.push(_ext.query(EVM_GAS_LIMIT));
+			stack.push(m_builder.CreateZExt(_runtimeManager.getTxContextItem(5), Type::Word));
 			break;
 
 		case Instruction::NUMBER:
-			stack.push(_ext.query(EVM_NUMBER));
+			stack.push(m_builder.CreateZExt(_runtimeManager.getTxContextItem(3), Type::Word));
 			break;
 
 		case Instruction::TIMESTAMP:
-			stack.push(_ext.query(EVM_TIMESTAMP));
+			stack.push(m_builder.CreateZExt(_runtimeManager.getTxContextItem(4), Type::Word));
 			break;
 
 		case Instruction::CALLVALUE:
@@ -889,7 +889,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 				auto noPenaltyCond = destExists;
 				if (m_mode >= EVM_CLEARING)
 				{
-					auto addr = _ext.query(EVM_ADDRESS);
+					auto addr = Endianness::toNative(m_builder, _runtimeManager.getAddress());
 					auto balance = _ext.balance(addr);
 					auto noTransfer = m_builder.CreateICmpEQ(balance,
 					                                         Constant::get(0));
