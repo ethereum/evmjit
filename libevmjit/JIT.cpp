@@ -10,6 +10,7 @@
 #include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #include <llvm/Support/TargetSelect.h>
+#include <evm.h>
 #include "preprocessor/llvm_includes_end.h"
 
 #include "Ext.h"
@@ -339,14 +340,6 @@ static void destroy(evm_instance* instance)
 	assert(instance == static_cast<void*>(&JITImpl::instance()));
 }
 
-static void releaseResult(evm_result const* result)
-{
-	// FIXME: We should make sure this function is called only if context
-	// is not null. Then we can remove the check.
-	if (result->payload.pointer)
-		std::free(result->payload.pointer);
-}
-
 static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 	evm_message const* msg, uint8_t const* code, size_t code_size)
 {
@@ -376,8 +369,7 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 	result.gas_left = 0;
 	result.output_data = nullptr;
 	result.output_size = 0;
-	result.payload.pointer = nullptr;
-	result.release = releaseResult;
+	result.release = nullptr;
 
 	auto codeIdentifier = makeCodeId(msg->code_hash, mode);
 	auto execFunc = jit.getExecFunc(codeIdentifier);
@@ -416,8 +408,18 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 	}
 
 	// Take care of the internal memory.
-	result.payload.pointer = ctx.m_memData;
-	ctx.m_memData = nullptr;
+	if (ctx.m_memData)
+	{
+		// Use result's reserved data to store the memory pointer.
+		result.reserved.context = ctx.m_memData;
+
+		// Set pointer to the destructor that will release the memory.
+		result.release = [](evm_result const* result)
+		{
+			std::free(result->reserved.context);
+		};
+		ctx.m_memData = nullptr;
+	}
 
 	jit.currentMsg = prevMsg;
 	return result;
