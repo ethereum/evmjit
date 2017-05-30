@@ -10,8 +10,10 @@
 #include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #include <llvm/Support/TargetSelect.h>
+#include <evm.h>
 #include "preprocessor/llvm_includes_end.h"
 
+#include "Ext.h"
 #include "Compiler.h"
 #include "Optimizer.h"
 #include "Cache.h"
@@ -22,7 +24,7 @@
 
 static_assert(sizeof(evm_uint256be) == 32, "evm_uint256be is too big");
 static_assert(sizeof(evm_uint160be) == 20, "evm_uint160be is too big");
-static_assert(sizeof(evm_result) <= 64, "evm_result does not fit cache line");
+static_assert(sizeof(evm_result) == 64, "evm_result does not fit cache line");
 static_assert(sizeof(evm_message) <= 17*8, "evm_message not optimally packed");
 static_assert(offsetof(evm_message, code_hash) % 8 == 0, "evm_message.code_hash not aligned");
 
@@ -170,7 +172,20 @@ static int64_t call_v2(
 	msg.gas = _gas;
 	msg.depth = jit.currentMsg->depth + 1;
 	// FIXME: Handle code hash.
-	return jit.callFn(_opaqueEnv, &msg, _outputData, _outputSize);
+	evm_result result;
+	jit.callFn(&result, _opaqueEnv, &msg);
+	// FIXME: Clarify when gas_left is valid.
+	int64_t r = result.gas_left;
+	if (result.code == EVM_SUCCESS || result.code == EVM_REVERT)
+	{
+		auto size = std::min(_outputSize, result.output_size);
+		std::copy(result.output_data, result.output_data + size, _outputData);
+	}
+	if (result.code != EVM_SUCCESS)
+		r |= EVM_CALL_FAILURE;
+	if (result.release)
+		result.release(&result);
+	return r;
 }
 
 
@@ -325,14 +340,6 @@ static void destroy(evm_instance* instance)
 	assert(instance == static_cast<void*>(&JITImpl::instance()));
 }
 
-static void releaseResult(evm_result const* result)
-{
-	// FIXME: We should make sure this function is called only if context
-	// is not null. Then we can remove the check.
-	if (result->context)
-		std::free(result->context);
-}
-
 static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 	evm_message const* msg, uint8_t const* code, size_t code_size)
 {
@@ -362,8 +369,7 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 	result.gas_left = 0;
 	result.output_data = nullptr;
 	result.output_size = 0;
-	result.context = nullptr;
-	result.release = releaseResult;
+	result.release = nullptr;
 
 	auto codeIdentifier = makeCodeId(msg->code_hash, mode);
 	auto execFunc = jit.getExecFunc(codeIdentifier);
@@ -402,8 +408,18 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 	}
 
 	// Take care of the internal memory.
-	result.context = ctx.m_memData;
-	ctx.m_memData = nullptr;
+	if (ctx.m_memData)
+	{
+		// Use result's reserved data to store the memory pointer.
+		result.reserved.context = ctx.m_memData;
+
+		// Set pointer to the destructor that will release the memory.
+		result.release = [](evm_result const* result)
+		{
+			std::free(result->reserved.context);
+		};
+		ctx.m_memData = nullptr;
+	}
 
 	jit.currentMsg = prevMsg;
 	return result;

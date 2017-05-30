@@ -11,7 +11,11 @@ namespace eth
 {
 namespace jit
 {
-	class Memory;
+
+/// The flag indicating call failure in evm_call_fn() -- highest bit set.
+constexpr int64_t EVM_CALL_FAILURE = 0x8000000000000000;
+
+class Memory;
 
 struct MemoryRef
 {
