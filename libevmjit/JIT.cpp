@@ -142,6 +142,7 @@ public:
 
 	evm_query_state_fn queryFn = nullptr;
 	evm_update_state_fn updateFn = nullptr;
+	evm_selfdestruct_fn selfdestructFn = nullptr;
 	evm_call_fn callFn = nullptr;
 	evm_get_tx_context_fn getTxContextFn = nullptr;
 	evm_get_block_hash_fn getBlockHashFn = nullptr;
@@ -199,6 +200,7 @@ class SymbolResolver : public llvm::SectionMemoryManager
 			.Case("env_sha3", reinterpret_cast<uint64_t>(&keccak))
 			.Case("evm.query", reinterpret_cast<uint64_t>(jit.queryFn))
 			.Case("evm.update", reinterpret_cast<uint64_t>(jit.updateFn))
+			.Case("evm.selfdestruct", reinterpret_cast<uint64_t>(jit.selfdestructFn))
 			.Case("evm.call", reinterpret_cast<uint64_t>(call_v2))
 			.Case("evm.get_tx_context", reinterpret_cast<uint64_t>(jit.getTxContextFn))
 			.Case("evm.blockhash", reinterpret_cast<uint64_t>(jit.getBlockHashFn))
@@ -321,7 +323,9 @@ bytes_ref ExecutionContext::getReturnData() const
 extern "C"
 {
 
-static evm_instance* create(evm_query_state_fn queryFn, evm_update_state_fn updateFn,
+static evm_instance* create(
+	evm_query_state_fn queryFn, evm_update_state_fn updateFn,
+	evm_selfdestruct_fn selfdestructFn,
 	evm_call_fn callFn, evm_get_tx_context_fn getTxContextFn,
 	evm_get_block_hash_fn getBlockHashFn, evm_log_fn logFn)
 {
@@ -330,6 +334,7 @@ static evm_instance* create(evm_query_state_fn queryFn, evm_update_state_fn upda
 	auto& jit = JITImpl::instance();
 	jit.queryFn = queryFn;
 	jit.updateFn = updateFn;
+	jit.selfdestructFn = selfdestructFn;
 	jit.callFn = callFn;
 	jit.getTxContextFn = getTxContextFn;
 	jit.getBlockHashFn = getBlockHashFn;

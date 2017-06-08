@@ -103,6 +103,25 @@ llvm::Function* getUpdateFunc(llvm::Module* _module)
 	return func;
 }
 
+llvm::Function* getSelfdestructFunc(llvm::Module* _module)
+{
+	static const auto funcName = "evm.selfdestruct";
+	auto func = _module->getFunction(funcName);
+	if (!func)
+	{
+		auto addrPtrTy = llvm::Type::getIntNPtrTy(_module->getContext(), 160);
+		auto fty = llvm::FunctionType::get(Type::Void, {Type::EnvPtr, addrPtrTy, addrPtrTy}, false);
+		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, _module);
+		func->addAttribute(2, llvm::Attribute::ReadOnly);
+		func->addAttribute(2, llvm::Attribute::NoAlias);
+		func->addAttribute(2, llvm::Attribute::NoCapture);
+		func->addAttribute(3, llvm::Attribute::ReadOnly);
+		func->addAttribute(3, llvm::Attribute::NoAlias);
+		func->addAttribute(3, llvm::Attribute::NoCapture);
+	}
+	return func;
+}
+
 llvm::Function* getLogFunc(llvm::Module* _module)
 {
 	static const auto funcName = "evm.log";
@@ -331,11 +350,10 @@ void Ext::sstore(llvm::Value* _index, llvm::Value* _value)
 void Ext::selfdestruct(llvm::Value* _beneficiary)
 {
 	auto addrTy = m_builder.getIntNTy(160);
-	auto func = getUpdateFunc(getModule());
-	auto b = Endianness::toBE(m_builder, _beneficiary);
-	auto undef = llvm::UndefValue::get(Type::WordPtr);
+	auto func = getSelfdestructFunc(getModule());
+	auto b = Endianness::toBE(m_builder, m_builder.CreateTrunc(_beneficiary, addrTy));
 	auto myAddr = Endianness::toBE(m_builder, m_builder.CreateTrunc(Endianness::toNative(m_builder, getRuntimeManager().getAddress()), addrTy));
-	createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_SELFDESTRUCT), myAddr, b, undef});
+	createCABICall(func, {getRuntimeManager().getEnvPtr(), myAddr, b});
 }
 
 llvm::Value* Ext::calldataload(llvm::Value* _idx)
