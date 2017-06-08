@@ -83,22 +83,59 @@ llvm::Function* getQueryFunc(llvm::Module* _module)
 	return func;
 }
 
-llvm::Function* getUpdateFunc(llvm::Module* _module)
+llvm::Function* getSetStorageFunc(llvm::Module* _module)
 {
-	static const auto funcName = "evm.update";
+	static const auto funcName = "evm.sstore";
 	auto func = _module->getFunction(funcName);
 	if (!func)
 	{
-		auto i32 = llvm::Type::getInt32Ty(_module->getContext());
 		auto addrPtrTy = llvm::Type::getIntNPtrTy(_module->getContext(), 160);
-		auto fty = llvm::FunctionType::get(Type::Void, {Type::EnvPtr, i32, addrPtrTy, Type::WordPtr, Type::WordPtr}, false);
+		auto fty = llvm::FunctionType::get(Type::Void, {Type::EnvPtr, addrPtrTy, Type::WordPtr, Type::WordPtr}, false);
+		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, _module);
+		func->addAttribute(2, llvm::Attribute::ReadOnly);
+		func->addAttribute(2, llvm::Attribute::NoAlias);
+		func->addAttribute(2, llvm::Attribute::NoCapture);
+		func->addAttribute(3, llvm::Attribute::ReadOnly);
+		func->addAttribute(3, llvm::Attribute::NoAlias);
+		func->addAttribute(3, llvm::Attribute::NoCapture);
+	}
+	return func;
+}
+
+llvm::Function* getSelfdestructFunc(llvm::Module* _module)
+{
+	static const auto funcName = "evm.selfdestruct";
+	auto func = _module->getFunction(funcName);
+	if (!func)
+	{
+		auto addrPtrTy = llvm::Type::getIntNPtrTy(_module->getContext(), 160);
+		auto fty = llvm::FunctionType::get(Type::Void, {Type::EnvPtr, addrPtrTy, addrPtrTy}, false);
+		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, _module);
+		func->addAttribute(2, llvm::Attribute::ReadOnly);
+		func->addAttribute(2, llvm::Attribute::NoAlias);
+		func->addAttribute(2, llvm::Attribute::NoCapture);
+		func->addAttribute(3, llvm::Attribute::ReadOnly);
+		func->addAttribute(3, llvm::Attribute::NoAlias);
+		func->addAttribute(3, llvm::Attribute::NoCapture);
+	}
+	return func;
+}
+
+llvm::Function* getLogFunc(llvm::Module* _module)
+{
+	static const auto funcName = "evm.log";
+	auto func = _module->getFunction(funcName);
+	if (!func)
+	{
+		auto addrPtrTy = llvm::Type::getIntNPtrTy(_module->getContext(), 160);
+		auto fty = llvm::FunctionType::get(Type::Void, {Type::EnvPtr, addrPtrTy, Type::BytePtr, Type::Size, Type::WordPtr, Type::Size}, false);
 		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, _module);
 		func->addAttribute(3, llvm::Attribute::ReadOnly);
 		func->addAttribute(3, llvm::Attribute::NoAlias);
 		func->addAttribute(3, llvm::Attribute::NoCapture);
-		func->addAttribute(4, llvm::Attribute::ReadOnly);
-		func->addAttribute(4, llvm::Attribute::NoAlias);
-		func->addAttribute(4, llvm::Attribute::NoCapture);
+		func->addAttribute(5, llvm::Attribute::ReadOnly);
+		func->addAttribute(5, llvm::Attribute::NoAlias);
+		func->addAttribute(5, llvm::Attribute::NoCapture);
 	}
 	return func;
 }
@@ -305,18 +342,17 @@ void Ext::sstore(llvm::Value* _index, llvm::Value* _value)
 	auto index = Endianness::toBE(m_builder, _index);
 	auto value = Endianness::toBE(m_builder, _value);
 	auto myAddr = Endianness::toBE(m_builder, m_builder.CreateTrunc(Endianness::toNative(m_builder, getRuntimeManager().getAddress()), addrTy));
-	auto func = getUpdateFunc(getModule());
-	createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_SSTORE), myAddr, index, value});
+	auto func = getSetStorageFunc(getModule());
+	createCABICall(func, {getRuntimeManager().getEnvPtr(), myAddr, index, value});
 }
 
 void Ext::selfdestruct(llvm::Value* _beneficiary)
 {
 	auto addrTy = m_builder.getIntNTy(160);
-	auto func = getUpdateFunc(getModule());
-	auto b = Endianness::toBE(m_builder, _beneficiary);
-	auto undef = llvm::UndefValue::get(Type::WordPtr);
+	auto func = getSelfdestructFunc(getModule());
+	auto b = Endianness::toBE(m_builder, m_builder.CreateTrunc(_beneficiary, addrTy));
 	auto myAddr = Endianness::toBE(m_builder, m_builder.CreateTrunc(Endianness::toNative(m_builder, getRuntimeManager().getAddress()), addrTy));
-	createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_SELFDESTRUCT), myAddr, b, undef});
+	createCABICall(func, {getRuntimeManager().getEnvPtr(), myAddr, b});
 }
 
 llvm::Value* Ext::calldataload(llvm::Value* _idx)
@@ -432,8 +468,8 @@ void Ext::log(llvm::Value* _memIdx, llvm::Value* _numBytes, llvm::ArrayRef<llvm:
 		m_topics = m_builder.CreateAlloca(Type::Word, m_builder.getInt32(4), "topics");
 	}
 
-	auto begin = m_memoryMan.getBytePtr(_memIdx);
-	auto size = m_builder.CreateTrunc(_numBytes, Type::Size, "size");
+	auto dataPtr = m_memoryMan.getBytePtr(_memIdx);
+	auto dataSize = m_builder.CreateTrunc(_numBytes, Type::Size, "data.size");
 
 	for (size_t i = 0; i < _topics.size(); ++i)
 	{
@@ -441,26 +477,15 @@ void Ext::log(llvm::Value* _memIdx, llvm::Value* _numBytes, llvm::ArrayRef<llvm:
 		auto p = m_builder.CreateConstGEP1_32(m_topics, static_cast<unsigned>(i));
 		m_builder.CreateStore(t, p);
 	}
+	auto numTopics = m_builder.getInt64(_topics.size());
 
 	auto addrTy = m_builder.getIntNTy(160);
-	auto func = getUpdateFunc(getModule());
-	auto a = getArgAlloca();
-	auto memRefTy = getMemRefTy(getModule());
-	auto pMemRef = m_builder.CreateBitCast(a, memRefTy->getPointerTo());
-	auto pData = m_builder.CreateConstGEP2_32(memRefTy, pMemRef, 0, 0, "log.data");
-	m_builder.CreateStore(begin, pData);
-	auto pSize = m_builder.CreateConstGEP2_32(memRefTy, pMemRef, 0, 1, "log.size");
-	m_builder.CreateStore(size, pSize);
-
-	auto b = getArgAlloca();
-	pMemRef = m_builder.CreateBitCast(b, memRefTy->getPointerTo());
-	pData = m_builder.CreateConstGEP2_32(memRefTy, pMemRef, 0, 0, "topics.data");
-	m_builder.CreateStore(m_builder.CreateBitCast(m_topics, m_builder.getInt8PtrTy()), pData);
-	pSize = m_builder.CreateConstGEP2_32(memRefTy, pMemRef, 0, 1, "topics.size");
-	m_builder.CreateStore(m_builder.getInt64(_topics.size() * 32), pSize);
-
+	auto func = getLogFunc(getModule());
+	
 	auto myAddr = Endianness::toBE(m_builder, m_builder.CreateTrunc(Endianness::toNative(m_builder, getRuntimeManager().getAddress()), addrTy));
-	createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_LOG), myAddr, a, b});
+	createCABICall(func, {
+		getRuntimeManager().getEnvPtr(), myAddr, dataPtr, dataSize, m_topics, numTopics
+	});
 }
 
 llvm::Value* Ext::call(evm_call_kind _kind,
