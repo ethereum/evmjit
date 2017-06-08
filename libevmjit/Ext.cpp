@@ -83,22 +83,21 @@ llvm::Function* getQueryFunc(llvm::Module* _module)
 	return func;
 }
 
-llvm::Function* getUpdateFunc(llvm::Module* _module)
+llvm::Function* getSetStorageFunc(llvm::Module* _module)
 {
-	static const auto funcName = "evm.update";
+	static const auto funcName = "evm.sstore";
 	auto func = _module->getFunction(funcName);
 	if (!func)
 	{
-		auto i32 = llvm::Type::getInt32Ty(_module->getContext());
 		auto addrPtrTy = llvm::Type::getIntNPtrTy(_module->getContext(), 160);
-		auto fty = llvm::FunctionType::get(Type::Void, {Type::EnvPtr, i32, addrPtrTy, Type::WordPtr, Type::WordPtr}, false);
+		auto fty = llvm::FunctionType::get(Type::Void, {Type::EnvPtr, addrPtrTy, Type::WordPtr, Type::WordPtr}, false);
 		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, _module);
+		func->addAttribute(2, llvm::Attribute::ReadOnly);
+		func->addAttribute(2, llvm::Attribute::NoAlias);
+		func->addAttribute(2, llvm::Attribute::NoCapture);
 		func->addAttribute(3, llvm::Attribute::ReadOnly);
 		func->addAttribute(3, llvm::Attribute::NoAlias);
 		func->addAttribute(3, llvm::Attribute::NoCapture);
-		func->addAttribute(4, llvm::Attribute::ReadOnly);
-		func->addAttribute(4, llvm::Attribute::NoAlias);
-		func->addAttribute(4, llvm::Attribute::NoCapture);
 	}
 	return func;
 }
@@ -343,8 +342,8 @@ void Ext::sstore(llvm::Value* _index, llvm::Value* _value)
 	auto index = Endianness::toBE(m_builder, _index);
 	auto value = Endianness::toBE(m_builder, _value);
 	auto myAddr = Endianness::toBE(m_builder, m_builder.CreateTrunc(Endianness::toNative(m_builder, getRuntimeManager().getAddress()), addrTy));
-	auto func = getUpdateFunc(getModule());
-	createCABICall(func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_SSTORE), myAddr, index, value});
+	auto func = getSetStorageFunc(getModule());
+	createCABICall(func, {getRuntimeManager().getEnvPtr(), myAddr, index, value});
 }
 
 void Ext::selfdestruct(llvm::Value* _beneficiary)

@@ -31,7 +31,6 @@ static_assert(offsetof(evm_message, code_hash) % 8 == 0, "evm_message.code_hash 
 // Check enums match int size.
 // On GCC/clang the underlying type should be unsigned int, on MSVC int
 static_assert(sizeof(evm_query_key)  == sizeof(int), "Enum `evm_query_key` is not the size of int");
-static_assert(sizeof(evm_update_key) == sizeof(int), "Enum `evm_update_key` is not the size of int");
 static_assert(sizeof(evm_call_kind)  == sizeof(int), "Enum `evm_call_kind` is not the size of int");
 static_assert(sizeof(evm_mode)       == sizeof(int), "Enum `evm_mode` is not the size of int");
 
@@ -141,7 +140,7 @@ public:
 	ExecFunc compile(evm_mode _mode, byte const* _code, uint64_t _codeSize, std::string const& _codeIdentifier);
 
 	evm_query_state_fn queryFn = nullptr;
-	evm_update_state_fn updateFn = nullptr;
+	evm_set_storage_fn updateFn = nullptr;
 	evm_selfdestruct_fn selfdestructFn = nullptr;
 	evm_call_fn callFn = nullptr;
 	evm_get_tx_context_fn getTxContextFn = nullptr;
@@ -199,7 +198,7 @@ class SymbolResolver : public llvm::SectionMemoryManager
 		auto addr = llvm::StringSwitch<uint64_t>(_name)
 			.Case("env_sha3", reinterpret_cast<uint64_t>(&keccak))
 			.Case("evm.query", reinterpret_cast<uint64_t>(jit.queryFn))
-			.Case("evm.update", reinterpret_cast<uint64_t>(jit.updateFn))
+			.Case("evm.sstore", reinterpret_cast<uint64_t>(jit.updateFn))
 			.Case("evm.selfdestruct", reinterpret_cast<uint64_t>(jit.selfdestructFn))
 			.Case("evm.call", reinterpret_cast<uint64_t>(call_v2))
 			.Case("evm.get_tx_context", reinterpret_cast<uint64_t>(jit.getTxContextFn))
@@ -324,7 +323,7 @@ extern "C"
 {
 
 static evm_instance* create(
-	evm_query_state_fn queryFn, evm_update_state_fn updateFn,
+	evm_query_state_fn queryFn, evm_set_storage_fn updateFn,
 	evm_selfdestruct_fn selfdestructFn,
 	evm_call_fn callFn, evm_get_tx_context_fn getTxContextFn,
 	evm_get_block_hash_fn getBlockHashFn, evm_log_fn logFn)
