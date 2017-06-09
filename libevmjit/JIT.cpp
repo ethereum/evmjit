@@ -140,7 +140,8 @@ public:
 	ExecFunc compile(evm_mode _mode, byte const* _code, uint64_t _codeSize, std::string const& _codeIdentifier);
 
 	evm_query_state_fn queryFn = nullptr;
-	evm_set_storage_fn updateFn = nullptr;
+	evm_get_storage_fn getStorageFn = nullptr;
+	evm_set_storage_fn setStorageFn = nullptr;
 	evm_selfdestruct_fn selfdestructFn = nullptr;
 	evm_call_fn callFn = nullptr;
 	evm_get_tx_context_fn getTxContextFn = nullptr;
@@ -198,7 +199,8 @@ class SymbolResolver : public llvm::SectionMemoryManager
 		auto addr = llvm::StringSwitch<uint64_t>(_name)
 			.Case("env_sha3", reinterpret_cast<uint64_t>(&keccak))
 			.Case("evm.query", reinterpret_cast<uint64_t>(jit.queryFn))
-			.Case("evm.sstore", reinterpret_cast<uint64_t>(jit.updateFn))
+			.Case("evm.sload", reinterpret_cast<uint64_t>(jit.getStorageFn))
+			.Case("evm.sstore", reinterpret_cast<uint64_t>(jit.setStorageFn))
 			.Case("evm.selfdestruct", reinterpret_cast<uint64_t>(jit.selfdestructFn))
 			.Case("evm.call", reinterpret_cast<uint64_t>(call_v2))
 			.Case("evm.get_tx_context", reinterpret_cast<uint64_t>(jit.getTxContextFn))
@@ -323,16 +325,22 @@ extern "C"
 {
 
 static evm_instance* create(
-	evm_query_state_fn queryFn, evm_set_storage_fn updateFn,
+	evm_query_state_fn queryFn,
+	evm_get_storage_fn getStorageFn,
+	evm_set_storage_fn setStorageFn,
 	evm_selfdestruct_fn selfdestructFn,
-	evm_call_fn callFn, evm_get_tx_context_fn getTxContextFn,
-	evm_get_block_hash_fn getBlockHashFn, evm_log_fn logFn)
+	evm_call_fn callFn,
+	evm_get_tx_context_fn getTxContextFn,
+	evm_get_block_hash_fn getBlockHashFn,
+	evm_log_fn logFn
+)
 {
 	// Let's always return the same instance. It's a bit of faking, but actually
 	// this might be a compliant implementation.
 	auto& jit = JITImpl::instance();
 	jit.queryFn = queryFn;
-	jit.updateFn = updateFn;
+	jit.getStorageFn = getStorageFn;
+	jit.setStorageFn = setStorageFn;
 	jit.selfdestructFn = selfdestructFn;
 	jit.callFn = callFn;
 	jit.getTxContextFn = getTxContextFn;
