@@ -69,16 +69,36 @@ llvm::Function* getQueryFunc(llvm::Module* _module)
 		auto i32 = llvm::IntegerType::getInt32Ty(_module->getContext());
 		auto addrTy = llvm::IntegerType::get(_module->getContext(), 160);
 		auto fty = llvm::FunctionType::get(
-				Type::Void, {Type::WordPtr, Type::EnvPtr, i32, addrTy->getPointerTo(), Type::WordPtr}, false);
+				Type::Void, {Type::WordPtr, Type::EnvPtr, i32, addrTy->getPointerTo()}, false);
 		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, _module);
 		func->addAttribute(1, llvm::Attribute::NoAlias);
 		func->addAttribute(1, llvm::Attribute::NoCapture);
 		func->addAttribute(4, llvm::Attribute::ReadOnly);
 		func->addAttribute(4, llvm::Attribute::NoAlias);
 		func->addAttribute(4, llvm::Attribute::NoCapture);
-		func->addAttribute(5, llvm::Attribute::ReadOnly);
-		func->addAttribute(5, llvm::Attribute::NoAlias);
-		func->addAttribute(5, llvm::Attribute::NoCapture);
+	}
+	return func;
+}
+
+llvm::Function* getGetStorageFunc(llvm::Module* _module)
+{
+	static const auto funcName = "evm.sload";
+	auto func = _module->getFunction(funcName);
+	if (!func)
+	{
+		// TODO: Mark the function as pure to eliminate multiple calls.
+		auto addrTy = llvm::IntegerType::get(_module->getContext(), 160);
+		auto fty = llvm::FunctionType::get(
+			Type::Void, {Type::WordPtr, Type::EnvPtr, addrTy->getPointerTo(), Type::WordPtr}, false);
+		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, _module);
+		func->addAttribute(1, llvm::Attribute::NoAlias);
+		func->addAttribute(1, llvm::Attribute::NoCapture);
+		func->addAttribute(3, llvm::Attribute::ReadOnly);
+		func->addAttribute(3, llvm::Attribute::NoAlias);
+		func->addAttribute(3, llvm::Attribute::NoCapture);
+		func->addAttribute(4, llvm::Attribute::ReadOnly);
+		func->addAttribute(4, llvm::Attribute::NoAlias);
+		func->addAttribute(4, llvm::Attribute::NoCapture);
 	}
 	return func;
 }
@@ -229,8 +249,7 @@ llvm::Function* getCallFunc(llvm::Module* _module)
 
 		builder.SetInsertPoint(checkBalanceBB);
 		builder.CreateStore(&addr, addrAlloca);
-		auto null = llvm::ConstantPointerNull::get(Type::WordPtr);
-		builder.CreateCall(queryFn, {v, &env, builder.getInt32(EVM_BALANCE), addrAlloca, null});
+		builder.CreateCall(queryFn, {v, &env, builder.getInt32(EVM_BALANCE), addrAlloca});
 		llvm::Value* balance = builder.CreateLoad(v);
 		balance = Endianness::toNative(builder, balance);
 		value = Endianness::toNative(builder, value);
@@ -330,9 +349,9 @@ llvm::Value* Ext::sload(llvm::Value* _index)
 	auto myAddr = Endianness::toBE(m_builder, m_builder.CreateTrunc(Endianness::toNative(m_builder, getRuntimeManager().getAddress()), addrTy));
 	auto pAddr = m_builder.CreateBitCast(getArgAlloca(), addrTy->getPointerTo());
 	m_builder.CreateStore(myAddr, pAddr);
-	auto func = getQueryFunc(getModule());
+	auto func = getGetStorageFunc(getModule());
 	auto pValue = getArgAlloca();
-	createCABICall(func, {pValue, getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_SLOAD), pAddr, index});
+	createCABICall(func, {pValue, getRuntimeManager().getEnvPtr(), pAddr, index});
 	return Endianness::toNative(m_builder, m_builder.CreateLoad(pValue));
 }
 
@@ -386,8 +405,7 @@ llvm::Value* Ext::balance(llvm::Value* _address)
 	auto pResult = getArgAlloca();
 	auto pAddr = m_builder.CreateBitCast(getArgAlloca(), addrTy->getPointerTo());
 	m_builder.CreateStore(address, pAddr);
-	auto null = llvm::ConstantPointerNull::get(Type::WordPtr);
-	createCABICall(func, {pResult, getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_BALANCE), pAddr, null});
+	createCABICall(func, {pResult, getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_BALANCE), pAddr});
 	return Endianness::toNative(m_builder, m_builder.CreateLoad(pResult));
 }
 
@@ -399,8 +417,7 @@ llvm::Value* Ext::exists(llvm::Value* _address)
 	auto pResult = getArgAlloca();
 	auto pAddr = m_builder.CreateBitCast(getArgAlloca(), addrTy->getPointerTo());
 	m_builder.CreateStore(address, pAddr);
-	auto null = llvm::ConstantPointerNull::get(Type::WordPtr);
-	createCABICall(func, {pResult, getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_ACCOUNT_EXISTS), pAddr, null});
+	createCABICall(func, {pResult, getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_ACCOUNT_EXISTS), pAddr});
 	return m_builder.CreateTrunc(m_builder.CreateLoad(pResult), m_builder.getInt1Ty());
 }
 
@@ -430,9 +447,8 @@ MemoryRef Ext::extcode(llvm::Value* _address)
 	auto address = Endianness::toBE(m_builder, m_builder.CreateTrunc(_address, addrTy));
 	auto pAddr = m_builder.CreateBitCast(getArgAlloca(), addrTy->getPointerTo());
 	m_builder.CreateStore(address, pAddr);
-	auto null = llvm::ConstantPointerNull::get(Type::WordPtr);
 	auto vPtr = getArgAlloca();
-	createCABICall(func, {vPtr, getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_CODE_BY_ADDRESS), pAddr, null});
+	createCABICall(func, {vPtr, getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_CODE_BY_ADDRESS), pAddr});
 	auto memRefTy = getMemRefTy(getModule());
 	auto memRefPtr = m_builder.CreateBitCast(vPtr, memRefTy->getPointerTo());
 	auto memRef = m_builder.CreateLoad(memRefTy, memRefPtr, "memref");
@@ -449,9 +465,8 @@ llvm::Value* Ext::extcodesize(llvm::Value* _address)
 	auto address = Endianness::toBE(m_builder, m_builder.CreateTrunc(_address, addrTy));
 	auto pAddr = m_builder.CreateBitCast(getArgAlloca(), addrTy->getPointerTo());
 	m_builder.CreateStore(address, pAddr);
-	auto null = llvm::ConstantPointerNull::get(Type::WordPtr);
 	auto vPtr = getArgAlloca();
-	createCABICall(func, {vPtr, getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_CODE_SIZE), pAddr, null});
+	createCABICall(func, {vPtr, getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_CODE_SIZE), pAddr});
 	auto int64ty = m_builder.getInt64Ty();
 	auto sizePtr = m_builder.CreateBitCast(vPtr, int64ty->getPointerTo());
 	auto size = m_builder.CreateLoad(int64ty, sizePtr, "codesize");
