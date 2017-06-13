@@ -10,7 +10,7 @@ dist: trusty
 osx_image: xcode8.2  # OSX 10.12, cmake 3.5
 env:
   global:
-    secure: "g3Ij6YqiOl/RaD3mdSHestkTDm49JPcJ90EbpFPfykkLZVAmZn6PP4WDvhBV9zcy4kUkERQs+8lj88wzw4JidxtT67WQBd/Lnvl06c+B1AB5jwoK9X5MKaOGvtXA18P8412rhB4a+1xFILuvM+2e74QUEPBV6tPlqZg9QZ9jwso="
+    secure: "BMDgV5REY3QSGGtixMyqg8AU6iS5ABGWgrdH7IXyTuFISHjRGrATNXU+JDh4K7YjCuRaPTUj4YPyj2koDuvcYMXaf9w/1Ov6DGH/oHiKybF+D5MABoNMC9G7mhpyaXvCVxjxJmn0EZo2J/0bwTjBhv0tBsHed9opMD6J9sWv5oo="
   matrix:
     - BUILD_TYPE=Release
     - BUILD_TYPE=Debug
