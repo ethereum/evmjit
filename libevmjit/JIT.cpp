@@ -139,7 +139,7 @@ public:
 	ExecFunc getExecFunc(std::string const& _codeIdentifier) const;
 	void mapExecFunc(std::string const& _codeIdentifier, ExecFunc _funcAddr);
 
-	ExecFunc compile(evm_mode _mode, byte const* _code, uint64_t _codeSize, std::string const& _codeIdentifier);
+	ExecFunc compile(evm_mode _mode, bool _staticCall, byte const* _code, uint64_t _codeSize, std::string const& _codeIdentifier);
 
 	evm_query_state_fn queryFn = nullptr;
 	evm_get_storage_fn getStorageFn = nullptr;
@@ -270,7 +270,7 @@ void JITImpl::mapExecFunc(std::string const& _codeIdentifier, ExecFunc _funcAddr
 	m_codeMap.emplace(_codeIdentifier, _funcAddr);
 }
 
-ExecFunc JITImpl::compile(evm_mode _mode, byte const* _code, uint64_t _codeSize,
+ExecFunc JITImpl::compile(evm_mode _mode, bool _staticCall, byte const* _code, uint64_t _codeSize,
 	std::string const& _codeIdentifier)
 {
 	auto module = Cache::getObject(_codeIdentifier, getLLVMContext());
@@ -280,7 +280,7 @@ ExecFunc JITImpl::compile(evm_mode _mode, byte const* _code, uint64_t _codeSize,
 		//listener->stateChanged(ExecState::Compilation);
 		assert(_code || !_codeSize);
 		//TODO: Can the Compiler be stateless?
-		module = Compiler({}, _mode, getLLVMContext()).compile(_code, _code + _codeSize, _codeIdentifier);
+		module = Compiler({}, _mode, _staticCall, getLLVMContext()).compile(_code, _code + _codeSize, _codeIdentifier);
 
 		if (g_optimize)
 		{
@@ -392,7 +392,8 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 	auto execFunc = jit.getExecFunc(codeIdentifier);
 	if (!execFunc)
 	{
-		execFunc = jit.compile(mode, ctx.code(), ctx.codeSize(), codeIdentifier);
+		bool const staticCall = (msg->flags & EVM_STATIC) != 0;
+		execFunc = jit.compile(mode, staticCall, ctx.code(), ctx.codeSize(), codeIdentifier);
 		if (!execFunc)
 			return result;
 		jit.mapExecFunc(codeIdentifier, execFunc);
@@ -465,7 +466,8 @@ static void prepare_code(evm_instance* instance, evm_mode mode, uint32_t flags,
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
 	auto codeIdentifier = makeCodeId(code_hash, mode, flags);
-	auto execFunc = jit.compile(mode, code, code_size, codeIdentifier);
+	bool const staticCall = (flags & EVM_STATIC) != 0;
+	auto execFunc = jit.compile(mode, staticCall, code, code_size, codeIdentifier);
 	if (execFunc) // FIXME: What with error?
 		jit.mapExecFunc(codeIdentifier, execFunc);
 }
