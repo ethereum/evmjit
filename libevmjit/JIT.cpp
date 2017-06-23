@@ -25,7 +25,7 @@
 static_assert(sizeof(evm_uint256be) == 32, "evm_uint256be is too big");
 static_assert(sizeof(evm_uint160be) == 20, "evm_uint160be is too big");
 static_assert(sizeof(evm_result) == 64, "evm_result does not fit cache line");
-static_assert(sizeof(evm_message) <= 17*8, "evm_message not optimally packed");
+static_assert(sizeof(evm_message) <= 18*8, "evm_message not optimally packed");
 static_assert(offsetof(evm_message, code_hash) % 8 == 0, "evm_message.code_hash not aligned");
 
 // Check enums match int size.
@@ -59,7 +59,7 @@ char modeToChar(evm_mode mode)
 }
 
 /// Combine code hash and compatibility mode into a printable code identifier.
-std::string makeCodeId(evm_uint256be codeHash, evm_mode mode)
+std::string makeCodeId(evm_uint256be codeHash, evm_mode mode, uint32_t flags)
 {
 	static const auto hexChars = "0123456789abcdef";
 	std::string str;
@@ -70,6 +70,8 @@ std::string makeCodeId(evm_uint256be codeHash, evm_mode mode)
 		str.push_back(hexChars[b >> 4]);
 	}
 	str.push_back(modeToChar(mode));
+	if (flags & EVM_STATIC)
+		str.push_back('S');
 	return str;
 }
 
@@ -386,7 +388,7 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 	result.output_size = 0;
 	result.release = nullptr;
 
-	auto codeIdentifier = makeCodeId(msg->code_hash, mode);
+	auto codeIdentifier = makeCodeId(msg->code_hash, mode, msg->flags);
 	auto execFunc = jit.getExecFunc(codeIdentifier);
 	if (!execFunc)
 	{
@@ -448,21 +450,21 @@ static int set_option(evm_instance* instance, char const* name,
 }
 
 static evm_code_status get_code_status(evm_instance* instance,
-	evm_mode mode, evm_uint256be code_hash)
+	evm_mode mode, uint32_t flags, evm_uint256be code_hash)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
-	auto codeIdentifier = makeCodeId(code_hash, mode);
+	auto codeIdentifier = makeCodeId(code_hash, mode, flags);
 	if (jit.getExecFunc(codeIdentifier) != nullptr)
 		return EVM_READY;
 	// TODO: Add support for EVM_CACHED.
 	return EVM_UNKNOWN;
 }
 
-static void prepare_code(evm_instance* instance, evm_mode mode,
+static void prepare_code(evm_instance* instance, evm_mode mode, uint32_t flags,
 	evm_uint256be code_hash, unsigned char const* code, size_t code_size)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
-	auto codeIdentifier = makeCodeId(code_hash, mode);
+	auto codeIdentifier = makeCodeId(code_hash, mode, flags);
 	auto execFunc = jit.compile(mode, code, code_size, codeIdentifier);
 	if (execFunc) // FIXME: What with error?
 		jit.mapExecFunc(codeIdentifier, execFunc);
