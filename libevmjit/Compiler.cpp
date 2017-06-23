@@ -780,18 +780,14 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			break;
 		}
 
-		case Instruction::DELEGATECALL:
-			if (m_mode == EVM_FRONTIER)
-			{
-				// Invalid opcode in Frontier compatibility mode.
-				_runtimeManager.exit(ReturnCode::OutOfGas);
-				it = _basicBlock.end() - 1;  // finish block compilation
-				break;
-			}
-		// else, fall-through
 		case Instruction::CALL:
 		case Instruction::CALLCODE:
+		case Instruction::DELEGATECALL:
 		{
+			// Handle invalid instructions.
+			if (inst == Instruction::DELEGATECALL && m_mode < EVM_HOMESTEAD)
+				goto invalidInstruction;
+
 			auto kind = (inst == Instruction::CALL) ?
 							EVM_CALL :
 							(inst == Instruction::CALLCODE) ? EVM_CALLCODE :
