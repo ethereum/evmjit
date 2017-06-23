@@ -271,6 +271,7 @@ int64_t GasMeter::getStepCost(Instruction inst) const
 	case Instruction::CALL:
 	case Instruction::CALLCODE:
 	case Instruction::DELEGATECALL:
+	case Instruction::STATICCALL:
 		return m_mode >= EVM_ANTI_DOS ? 700 : JITSchedule::callGas::value;
 
 	case Instruction::CREATE:

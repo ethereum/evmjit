@@ -166,6 +166,7 @@ static int64_t call_v2(
 ) noexcept
 {
 	auto& jit = JITImpl::instance();
+
 	evm_message msg;
 	msg.kind = _kind;
 	msg.address = *_address;
@@ -175,6 +176,13 @@ static int64_t call_v2(
 	msg.input_size = _inputSize;
 	msg.gas = _gas;
 	msg.depth = jit.currentMsg->depth + 1;
+	msg.flags = jit.currentMsg->flags;
+	if (_kind == EVM_STATICCALL)
+	{
+		msg.kind = EVM_CALL;
+		msg.flags |= EVM_STATIC;
+	}
+
 	// FIXME: Handle code hash.
 	evm_result result;
 	jit.callFn(&result, _opaqueEnv, &msg);

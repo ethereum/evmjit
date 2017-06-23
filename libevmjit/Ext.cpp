@@ -503,7 +503,7 @@ void Ext::log(llvm::Value* _memIdx, llvm::Value* _numBytes, llvm::ArrayRef<llvm:
 	});
 }
 
-llvm::Value* Ext::call(evm_call_kind _kind,
+llvm::Value* Ext::call(int _kind,
 					   llvm::Value* _gas,
 					   llvm::Value* _addr,
 					   llvm::Value* _value,

@@ -15,6 +15,9 @@ namespace jit
 /// The flag indicating call failure in evm_call_fn() -- highest bit set.
 constexpr int64_t EVM_CALL_FAILURE = 0x8000000000000000;
 
+/// The hackish constant indicating EVM_CALL + EVM_STATIC flag.
+constexpr int EVM_STATICCALL = EVM_CREATE + 1;
+
 class Memory;
 
 struct MemoryRef
@@ -65,7 +68,7 @@ public:
 	void log(llvm::Value* _memIdx, llvm::Value* _numBytes, llvm::ArrayRef<llvm::Value*> _topics);
 	void selfdestruct(llvm::Value* _beneficiary);
 
-	llvm::Value* call(evm_call_kind _kind,
+	llvm::Value* call(int _kind,
 	                  llvm::Value* _gas,
 	                  llvm::Value* _addr,
 	                  llvm::Value* _value,
