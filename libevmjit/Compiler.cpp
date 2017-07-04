@@ -671,6 +671,14 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			stack.push(_runtimeManager.getCallDataSize());
 			break;
 
+		case Instruction::RETURNDATASIZE:
+			if (m_mode < EVM_METROPOLIS)
+				goto invalidInstruction;
+
+			// FIXME: Implement me.
+			stack.push(Constant::get(0));
+			break;
+
 		case Instruction::BLOCKHASH:
 		{
 			auto number = stack.pop();
@@ -711,6 +719,19 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			auto srcSize = _runtimeManager.getCallDataSize();
 
 			_memory.copyBytes(srcPtr, srcSize, srcIdx, destMemIdx, reqBytes);
+			break;
+		}
+
+		case Instruction::RETURNDATACOPY:
+		{
+			auto destMemIdx = stack.pop();
+			auto srcIdx = stack.pop();
+			auto reqBytes = stack.pop();
+
+			// FIXME: Implement me.
+
+			if (m_mode < EVM_METROPOLIS)
+				goto invalidInstruction;
 			break;
 		}
 
