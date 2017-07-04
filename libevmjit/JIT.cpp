@@ -151,6 +151,7 @@ public:
 	evm_log_fn logFn = nullptr;
 
 	evm_message const* currentMsg = nullptr;
+	std::vector<uint8_t> returnBuffer;
 };
 
 static int64_t call_v2(
@@ -192,9 +193,14 @@ static int64_t call_v2(
 	{
 		auto size = std::min(_outputSize, result.output_size);
 		std::copy(result.output_data, result.output_data + size, _outputData);
+		jit.returnBuffer = {result.output_data, result.output_data + result.output_size};
 	}
+	else
+		jit.returnBuffer.clear();
+
 	if (result.code != EVM_SUCCESS)
 		r |= EVM_CALL_FAILURE;
+
 	if (result.release)
 		result.release(&result);
 	return r;
