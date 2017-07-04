@@ -30,9 +30,10 @@ namespace jit
 
 static const auto c_destIdxLabel = "destIdx";
 
-Compiler::Compiler(Options const& _options, evm_mode _mode, llvm::LLVMContext& _llvmContext):
+Compiler::Compiler(Options const& _options, evm_mode _mode, bool _staticCall, llvm::LLVMContext& _llvmContext):
 	m_options(_options),
 	m_mode(_mode),
+	m_staticCall(_staticCall),
 	m_builder(_llvmContext)
 {
 	Type::init(m_builder.getContext());
@@ -573,6 +574,9 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 
 		case Instruction::SSTORE:
 		{
+			if (m_staticCall)
+				goto invalidInstruction;
+
 			auto index = stack.pop();
 			auto value = stack.pop();
 			_gasMeter.countSStore(_ext, index, value);
@@ -746,6 +750,9 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 
 		case Instruction::CREATE:
 		{
+			if (m_staticCall)
+				goto invalidInstruction;
+
 			auto endowment = stack.pop();
 			auto initOff = stack.pop();
 			auto initSize = stack.pop();
@@ -779,25 +786,22 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			break;
 		}
 
-		case Instruction::DELEGATECALL:
-			if (m_mode == EVM_FRONTIER)
-			{
-				// Invalid opcode in Frontier compatibility mode.
-				_runtimeManager.exit(ReturnCode::OutOfGas);
-				it = _basicBlock.end() - 1;  // finish block compilation
-				break;
-			}
-		// else, fall-through
 		case Instruction::CALL:
 		case Instruction::CALLCODE:
+		case Instruction::DELEGATECALL:
+		case Instruction::STATICCALL:
 		{
-			auto kind = (inst == Instruction::CALL) ?
-							EVM_CALL :
-							(inst == Instruction::CALLCODE) ? EVM_CALLCODE :
-															  EVM_DELEGATECALL;
+			// Handle invalid instructions.
+			if (inst == Instruction::DELEGATECALL && m_mode < EVM_HOMESTEAD)
+				goto invalidInstruction;
+
+			if (inst == Instruction::STATICCALL && m_mode < EVM_METROPOLIS)
+				goto invalidInstruction;
+
 			auto callGas = stack.pop();
 			auto address = stack.pop();
-			auto value = (kind == EVM_DELEGATECALL) ? Constant::get(0) : stack.pop();
+			bool hasValue = inst == Instruction::CALL || inst == Instruction::CALLCODE;
+			auto value = hasValue ? stack.pop() : Constant::get(0);
 
 			auto inOff = stack.pop();
 			auto inSize = stack.pop();
@@ -812,9 +816,16 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			_memory.require(inOff, inSize);
 
 			auto noTransfer = m_builder.CreateICmpEQ(value, Constant::get(0));
+
+			// For static call mode, select infinite penalty for CALL with
+			// value transfer.
+			auto const transferGas = (inst == Instruction::CALL && m_staticCall) ?
+				std::numeric_limits<int64_t>::max() :
+				JITSchedule::valueTransferGas::value;
+
 			auto transferCost = m_builder.CreateSelect(
 					noTransfer, m_builder.getInt64(0),
-					m_builder.getInt64(JITSchedule::valueTransferGas::value));
+					m_builder.getInt64(transferGas));
 			_gasMeter.count(transferCost, _runtimeManager.getJmpBuf(),
 							_runtimeManager.getGasPtr());
 
@@ -849,6 +860,17 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 					m_builder.getInt64(JITSchedule::callStipend::value));
 			auto gas = m_builder.CreateTrunc(callGas, Type::Gas, "call.gas.declared");
 			gas = m_builder.CreateAdd(gas, stipend, "call.gas", true, true);
+			int kind = [inst]() -> int
+			{
+				switch (inst)
+				{
+				case Instruction::CALL: return EVM_CALL;
+				case Instruction::CALLCODE: return EVM_CALLCODE;
+				case Instruction::DELEGATECALL: return EVM_DELEGATECALL;
+				case Instruction::STATICCALL: return EVM_STATICCALL;
+				default: LLVM_BUILTIN_UNREACHABLE;
+				}
+			}();
 			auto r = _ext.call(kind, gas, address, value, inOff, inSize, outOff,
 							   outSize);
 			auto ret =
@@ -882,6 +904,9 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 
 		case Instruction::SUICIDE:
 		{
+			if (m_staticCall)
+				goto invalidInstruction;
+
 			auto dest = stack.pop();
 			if (m_mode >= EVM_ANTI_DOS)
 			{
@@ -914,6 +939,9 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 		case Instruction::LOG3:
 		case Instruction::LOG4:
 		{
+			if (m_staticCall)
+				goto invalidInstruction;
+
 			auto beginIdx = stack.pop();
 			auto numBytes = stack.pop();
 			_memory.require(beginIdx, numBytes);

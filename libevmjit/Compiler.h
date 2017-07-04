@@ -23,7 +23,7 @@ public:
 		bool dumpCFG = false;
 	};
 
-	Compiler(Options const& _options, evm_mode _mode, llvm::LLVMContext& _llvmContext);
+	Compiler(Options const& _options, evm_mode _mode, bool _staticCall, llvm::LLVMContext& _llvmContext);
 
 	std::unique_ptr<llvm::Module> compile(code_iterator _begin, code_iterator _end, std::string const& _id);
 
@@ -40,6 +40,8 @@ private:
 
 	/// EVM compatibility mode.
 	evm_mode m_mode;
+
+	bool const m_staticCall = false;
 
 	/// Helper class for generating IR
 	IRBuilder m_builder;

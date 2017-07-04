@@ -155,6 +155,8 @@ enum class Instruction: uint8_t
 	RETURN,				///< halt execution returning output data
 	DELEGATECALL,		///< like CALLCODE but keeps caller's value and sender (only from homestead on)
 
+	STATICCALL = 0xfa,	///< Like CALL but does not allow state modification.
+
 	REVERT = 0xfd,		///< stop execution and revert state changes, without consuming all provided gas
 	SUICIDE = 0xff		///< halt execution and register account for later deletion
 };

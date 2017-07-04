@@ -25,7 +25,7 @@
 static_assert(sizeof(evm_uint256be) == 32, "evm_uint256be is too big");
 static_assert(sizeof(evm_uint160be) == 20, "evm_uint160be is too big");
 static_assert(sizeof(evm_result) == 64, "evm_result does not fit cache line");
-static_assert(sizeof(evm_message) <= 17*8, "evm_message not optimally packed");
+static_assert(sizeof(evm_message) <= 18*8, "evm_message not optimally packed");
 static_assert(offsetof(evm_message, code_hash) % 8 == 0, "evm_message.code_hash not aligned");
 
 // Check enums match int size.
@@ -59,7 +59,7 @@ char modeToChar(evm_mode mode)
 }
 
 /// Combine code hash and compatibility mode into a printable code identifier.
-std::string makeCodeId(evm_uint256be codeHash, evm_mode mode)
+std::string makeCodeId(evm_uint256be codeHash, evm_mode mode, uint32_t flags)
 {
 	static const auto hexChars = "0123456789abcdef";
 	std::string str;
@@ -70,6 +70,8 @@ std::string makeCodeId(evm_uint256be codeHash, evm_mode mode)
 		str.push_back(hexChars[b >> 4]);
 	}
 	str.push_back(modeToChar(mode));
+	if (flags & EVM_STATIC)
+		str.push_back('S');
 	return str;
 }
 
@@ -137,7 +139,7 @@ public:
 	ExecFunc getExecFunc(std::string const& _codeIdentifier) const;
 	void mapExecFunc(std::string const& _codeIdentifier, ExecFunc _funcAddr);
 
-	ExecFunc compile(evm_mode _mode, byte const* _code, uint64_t _codeSize, std::string const& _codeIdentifier);
+	ExecFunc compile(evm_mode _mode, bool _staticCall, byte const* _code, uint64_t _codeSize, std::string const& _codeIdentifier);
 
 	evm_query_state_fn queryFn = nullptr;
 	evm_get_storage_fn getStorageFn = nullptr;
@@ -164,6 +166,7 @@ static int64_t call_v2(
 ) noexcept
 {
 	auto& jit = JITImpl::instance();
+
 	evm_message msg;
 	msg.kind = _kind;
 	msg.address = *_address;
@@ -173,6 +176,13 @@ static int64_t call_v2(
 	msg.input_size = _inputSize;
 	msg.gas = _gas;
 	msg.depth = jit.currentMsg->depth + 1;
+	msg.flags = jit.currentMsg->flags;
+	if (_kind == EVM_STATICCALL)
+	{
+		msg.kind = EVM_CALL;
+		msg.flags |= EVM_STATIC;
+	}
+
 	// FIXME: Handle code hash.
 	evm_result result;
 	jit.callFn(&result, _opaqueEnv, &msg);
@@ -268,7 +278,7 @@ void JITImpl::mapExecFunc(std::string const& _codeIdentifier, ExecFunc _funcAddr
 	m_codeMap.emplace(_codeIdentifier, _funcAddr);
 }
 
-ExecFunc JITImpl::compile(evm_mode _mode, byte const* _code, uint64_t _codeSize,
+ExecFunc JITImpl::compile(evm_mode _mode, bool _staticCall, byte const* _code, uint64_t _codeSize,
 	std::string const& _codeIdentifier)
 {
 	auto module = Cache::getObject(_codeIdentifier, getLLVMContext());
@@ -278,7 +288,7 @@ ExecFunc JITImpl::compile(evm_mode _mode, byte const* _code, uint64_t _codeSize,
 		//listener->stateChanged(ExecState::Compilation);
 		assert(_code || !_codeSize);
 		//TODO: Can the Compiler be stateless?
-		module = Compiler({}, _mode, getLLVMContext()).compile(_code, _code + _codeSize, _codeIdentifier);
+		module = Compiler({}, _mode, _staticCall, getLLVMContext()).compile(_code, _code + _codeSize, _codeIdentifier);
 
 		if (g_optimize)
 		{
@@ -386,11 +396,12 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 	result.output_size = 0;
 	result.release = nullptr;
 
-	auto codeIdentifier = makeCodeId(msg->code_hash, mode);
+	auto codeIdentifier = makeCodeId(msg->code_hash, mode, msg->flags);
 	auto execFunc = jit.getExecFunc(codeIdentifier);
 	if (!execFunc)
 	{
-		execFunc = jit.compile(mode, ctx.code(), ctx.codeSize(), codeIdentifier);
+		bool const staticCall = (msg->flags & EVM_STATIC) != 0;
+		execFunc = jit.compile(mode, staticCall, ctx.code(), ctx.codeSize(), codeIdentifier);
 		if (!execFunc)
 			return result;
 		jit.mapExecFunc(codeIdentifier, execFunc);
@@ -448,22 +459,23 @@ static int set_option(evm_instance* instance, char const* name,
 }
 
 static evm_code_status get_code_status(evm_instance* instance,
-	evm_mode mode, evm_uint256be code_hash)
+	evm_mode mode, uint32_t flags, evm_uint256be code_hash)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
-	auto codeIdentifier = makeCodeId(code_hash, mode);
+	auto codeIdentifier = makeCodeId(code_hash, mode, flags);
 	if (jit.getExecFunc(codeIdentifier) != nullptr)
 		return EVM_READY;
 	// TODO: Add support for EVM_CACHED.
 	return EVM_UNKNOWN;
 }
 
-static void prepare_code(evm_instance* instance, evm_mode mode,
+static void prepare_code(evm_instance* instance, evm_mode mode, uint32_t flags,
 	evm_uint256be code_hash, unsigned char const* code, size_t code_size)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
-	auto codeIdentifier = makeCodeId(code_hash, mode);
-	auto execFunc = jit.compile(mode, code, code_size, codeIdentifier);
+	auto codeIdentifier = makeCodeId(code_hash, mode, flags);
+	bool const staticCall = (flags & EVM_STATIC) != 0;
+	auto execFunc = jit.compile(mode, staticCall, code, code_size, codeIdentifier);
 	if (execFunc) // FIXME: What with error?
 		jit.mapExecFunc(codeIdentifier, execFunc);
 }
