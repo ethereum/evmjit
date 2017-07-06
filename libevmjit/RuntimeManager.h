@@ -47,6 +47,9 @@ public:
 	llvm::Value* getStackBase() const { return m_stackBase; }
 	llvm::Value* getStackSize() const { return m_stackSize; }
 
+	llvm::Value* getReturnBufDataPtr() const { return m_returnBufDataPtr; }
+	llvm::Value* getReturnBufSizePtr() const { return m_returnBufSizePtr; }
+
 	void setJmpBuf(llvm::Value* _jmpBuf) { m_jmpBuf = _jmpBuf; }
 	void setExitBB(llvm::BasicBlock* _bb) { m_exitBB = _bb; }
 
@@ -68,6 +71,8 @@ private:
 	llvm::Value* m_gasPtr = nullptr;
 	llvm::Value* m_memPtr = nullptr;
 	llvm::Value* m_envPtr = nullptr;
+	llvm::Value* m_returnBufDataPtr = nullptr;
+	llvm::Value* m_returnBufSizePtr = nullptr;
 
 	llvm::Value* m_txCtxLoaded = nullptr;
 	llvm::Value* m_txCtx = nullptr;

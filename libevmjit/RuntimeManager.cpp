@@ -163,6 +163,11 @@ RuntimeManager::RuntimeManager(IRBuilder& _builder, code_iterator _codeBegin, co
 	m_gasPtr = m_builder.CreateAlloca(Type::Gas, nullptr, "gas.ptr");
 	m_builder.CreateStore(m_dataElts[RuntimeData::Index::Gas], m_gasPtr);
 
+	m_returnBufDataPtr = m_builder.CreateAlloca(Type::BytePtr, nullptr, "returndata.ptr");
+	m_builder.CreateStore(llvm::ConstantPointerNull::get(Type::BytePtr), m_returnBufDataPtr);
+	m_returnBufSizePtr = m_builder.CreateAlloca(Type::Size, nullptr, "returndatasize.ptr");
+	m_builder.CreateStore(m_builder.getInt64(0), m_returnBufSizePtr);
+
 	m_exitBB = llvm::BasicBlock::Create(m_builder.getContext(), "Exit", getMainFunction());
 	InsertPointGuard guard{m_builder};
 	m_builder.SetInsertPoint(m_exitBB);
