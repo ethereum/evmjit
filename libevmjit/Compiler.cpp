@@ -729,6 +729,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			auto reqBytes = stack.pop();
 
 			// FIXME: Implement me.
+			(void) destMemIdx;(void) srcIdx;(void) reqBytes;
 
 			if (m_mode < EVM_METROPOLIS)
 				goto invalidInstruction;
