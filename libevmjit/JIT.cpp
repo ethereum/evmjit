@@ -163,7 +163,9 @@ static int64_t call_v2(
 	uint8_t const* _inputData,
 	size_t _inputSize,
 	uint8_t* _outputData,
-	size_t _outputSize
+	size_t _outputSize,
+	uint8_t const** o_bufData,
+	size_t* o_bufSize
 ) noexcept
 {
 	auto& jit = JITImpl::instance();
@@ -197,6 +199,9 @@ static int64_t call_v2(
 	}
 	else
 		jit.returnBuffer.clear();
+
+	*o_bufData = jit.returnBuffer.data();
+	*o_bufSize = jit.returnBuffer.size();
 
 	if (result.code != EVM_SUCCESS)
 		r |= EVM_CALL_FAILURE;

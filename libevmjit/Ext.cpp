@@ -180,7 +180,9 @@ llvm::Function* getCallFunc(llvm::Module* _module)
 		auto addrPtrTy = addrTy->getPointerTo();
 		auto fty = llvm::FunctionType::get(
 			Type::Gas,
-			{Type::EnvPtr, i32, Type::Gas, addrPtrTy, Type::WordPtr, Type::BytePtr, Type::Size, Type::BytePtr, Type::Size},
+			{Type::EnvPtr, i32, Type::Gas, addrPtrTy, Type::WordPtr,
+			 Type::BytePtr, Type::Size, Type::BytePtr, Type::Size,
+			 Type::BytePtr->getPointerTo(), Type::Size->getPointerTo()},
 			false);
 		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, "evm.call", _module);
 		func->addAttribute(4, llvm::Attribute::ReadOnly);
@@ -197,7 +199,8 @@ llvm::Function* getCallFunc(llvm::Module* _module)
 		// Create a call wrapper to handle additional checks.
 		fty = llvm::FunctionType::get(
 			Type::Gas,
-			{Type::EnvPtr, i32, Type::Gas, addrPtrTy, Type::WordPtr, Type::BytePtr, Type::Size, Type::BytePtr, Type::Size, addrTy, Type::Size},
+			{Type::EnvPtr, i32, Type::Gas, addrPtrTy, Type::WordPtr, Type::BytePtr, Type::Size, Type::BytePtr, Type::Size,
+			 Type::BytePtr->getPointerTo(), Type::Size->getPointerTo(), addrTy, Type::Size},
 			false
 		);
 		func = llvm::Function::Create(fty, llvm::Function::PrivateLinkage, funcName, _module);
@@ -219,11 +222,10 @@ llvm::Function* getCallFunc(llvm::Module* _module)
 		auto& gas = *iter;
 		std::advance(iter, 2);
 		auto& valuePtr = *iter;
-		std::advance(iter, 5);
+		std::advance(iter, 7);
 		auto& addr = *iter;
 		std::advance(iter, 1);
 		auto& depth = *iter;
-
 
 		auto& ctx = _module->getContext();
 		llvm::IRBuilder<> builder(ctx);
@@ -257,8 +259,8 @@ llvm::Function* getCallFunc(llvm::Module* _module)
 		builder.CreateCondBr(balanceOk, callBB, failBB);
 
 		builder.SetInsertPoint(callBB);
-		// Pass the first 9 args to the external call.
-		llvm::Value* args[9];
+		// Pass the first 11 args to the external call.
+		llvm::Value* args[11];
 		auto it = func->arg_begin();
 		for (auto outIt = std::begin(args); outIt != std::end(args); ++it, ++outIt)
 			*outIt = &*it;
@@ -527,9 +529,12 @@ llvm::Value* Ext::call(int _kind,
 	auto func = getCallFunc(getModule());
 	auto myAddr = Endianness::toBE(m_builder, m_builder.CreateTrunc(Endianness::toNative(m_builder, getRuntimeManager().getAddress()), addrTy));
 	return createCABICall(
-		func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(_kind), gas,
-			   addr, value, inData, inSize, outData, outSize,
-			   myAddr, getRuntimeManager().getDepth()});
+		func,
+		{getRuntimeManager().getEnvPtr(), m_builder.getInt32(_kind), gas,
+		 addr, value, inData, inSize, outData, outSize,
+		 getRuntimeManager().getReturnBufDataPtr(), getRuntimeManager().getReturnBufSizePtr(),
+		 myAddr, getRuntimeManager().getDepth()
+		});
 }
 
 std::tuple<llvm::Value*, llvm::Value*> Ext::create(llvm::Value* _gas,
@@ -550,7 +555,10 @@ std::tuple<llvm::Value*, llvm::Value*> Ext::create(llvm::Value* _gas,
 	auto ret = createCABICall(
 		func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_CREATE),
 			   _gas, llvm::UndefValue::get(addrTy), value, inData, inSize, pAddr,
-			   m_builder.getInt64(20), myAddr, getRuntimeManager().getDepth()});
+			   m_builder.getInt64(20),
+			   getRuntimeManager().getReturnBufDataPtr(), getRuntimeManager().getReturnBufSizePtr(),
+			   myAddr, getRuntimeManager().getDepth()
+		});
 
 	pAddr = m_builder.CreateBitCast(pAddr, addrTy->getPointerTo());
 	return std::tuple<llvm::Value*, llvm::Value*>{ret, pAddr};
