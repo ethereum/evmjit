@@ -672,12 +672,15 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			break;
 
 		case Instruction::RETURNDATASIZE:
+		{
 			if (m_mode < EVM_METROPOLIS)
 				goto invalidInstruction;
 
-			// FIXME: Implement me.
-			stack.push(Constant::get(0));
+			auto returnBufSizePtr = _runtimeManager.getReturnBufSizePtr();
+			auto returnBufSize = m_builder.CreateLoad(returnBufSizePtr);
+			stack.push(m_builder.CreateZExt(returnBufSize, Type::Word));
 			break;
+		}
 
 		case Instruction::BLOCKHASH:
 		{
@@ -724,15 +727,17 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 
 		case Instruction::RETURNDATACOPY:
 		{
+			if (m_mode < EVM_METROPOLIS)
+				goto invalidInstruction;
+
 			auto destMemIdx = stack.pop();
 			auto srcIdx = stack.pop();
 			auto reqBytes = stack.pop();
 
-			// FIXME: Implement me.
-			(void) destMemIdx;(void) srcIdx;(void) reqBytes;
+			auto srcPtr = m_builder.CreateLoad(_runtimeManager.getReturnBufDataPtr());
+			auto srcSize = m_builder.CreateLoad(_runtimeManager.getReturnBufSizePtr());
 
-			if (m_mode < EVM_METROPOLIS)
-				goto invalidInstruction;
+			_memory.copyBytesNoPadding(srcPtr, srcSize, srcIdx, destMemIdx, reqBytes);
 			break;
 		}
 

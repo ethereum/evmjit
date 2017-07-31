@@ -244,6 +244,30 @@ void Memory::copyBytes(llvm::Value* _srcPtr, llvm::Value* _srcSize, llvm::Value*
 	m_builder.CreateMemSet(pad, m_builder.getInt8(0), bytesToZero, 0);
 }
 
+void Memory::copyBytesNoPadding(llvm::Value* _srcPtr, llvm::Value* _srcSize, llvm::Value* _srcIdx,
+								llvm::Value* _destMemIdx, llvm::Value* _reqBytes)
+{
+	require(_destMemIdx, _reqBytes);
+
+	// Additional copy cost
+	// TODO: This round ups to 32 happens in many places
+	auto reqBytes = m_builder.CreateTrunc(_reqBytes, Type::Size);
+	auto copyWords = m_builder.CreateUDiv(m_builder.CreateNUWAdd(reqBytes, m_builder.getInt64(31)), m_builder.getInt64(32));
+
+	auto reqSize = m_builder.CreateAdd(_srcIdx, _reqBytes);
+	auto bufferOverrun = m_builder.CreateICmpUGT(reqSize, m_builder.CreateZExt(_srcSize, Type::Word));
+	auto penalty = m_builder.getInt64(std::numeric_limits<int64_t>::max());
+	auto cost = m_builder.CreateSelect(bufferOverrun, penalty, copyWords);
+	m_gasMeter.countCopy(cost);
+
+	auto srcIdx = m_builder.CreateTrunc(_srcIdx, Type::Size);
+
+	auto src = m_builder.CreateGEP(_srcPtr, srcIdx, "src");
+	auto dstIdx = m_builder.CreateTrunc(_destMemIdx, Type::Size, "dstIdx");
+	auto dst = m_memory.getPtr(getRuntimeManager().getMem(), dstIdx);
+	m_builder.CreateMemCpy(dst, src, reqBytes, 0);
+}
+
 }
 }
 }
