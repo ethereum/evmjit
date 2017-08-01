@@ -673,7 +673,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 
 		case Instruction::RETURNDATASIZE:
 		{
-			if (m_mode < EVM_METROPOLIS)
+			if (m_mode < EVM_BYZANTIUM)
 				goto invalidInstruction;
 
 			auto returnBufSizePtr = _runtimeManager.getReturnBufSizePtr();
@@ -727,7 +727,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 
 		case Instruction::RETURNDATACOPY:
 		{
-			if (m_mode < EVM_METROPOLIS)
+			if (m_mode < EVM_BYZANTIUM)
 				goto invalidInstruction;
 
 			auto destMemIdx = stack.pop();
@@ -822,7 +822,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			if (inst == Instruction::DELEGATECALL && m_mode < EVM_HOMESTEAD)
 				goto invalidInstruction;
 
-			if (inst == Instruction::STATICCALL && m_mode < EVM_METROPOLIS)
+			if (inst == Instruction::STATICCALL && m_mode < EVM_BYZANTIUM)
 				goto invalidInstruction;
 
 			auto callGas = stack.pop();
@@ -916,7 +916,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 		case Instruction::REVERT:
 		{
 			auto const isRevert = inst == Instruction::REVERT;
-			if (isRevert && m_mode < EVM_METROPOLIS)
+			if (isRevert && m_mode < EVM_BYZANTIUM)
 				goto invalidInstruction;
 
 			auto index = stack.pop();
