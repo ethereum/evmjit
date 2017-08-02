@@ -671,6 +671,17 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			stack.push(_runtimeManager.getCallDataSize());
 			break;
 
+		case Instruction::RETURNDATASIZE:
+		{
+			if (m_mode < EVM_METROPOLIS)
+				goto invalidInstruction;
+
+			auto returnBufSizePtr = _runtimeManager.getReturnBufSizePtr();
+			auto returnBufSize = m_builder.CreateLoad(returnBufSizePtr);
+			stack.push(m_builder.CreateZExt(returnBufSize, Type::Word));
+			break;
+		}
+
 		case Instruction::BLOCKHASH:
 		{
 			auto number = stack.pop();
@@ -711,6 +722,22 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			auto srcSize = _runtimeManager.getCallDataSize();
 
 			_memory.copyBytes(srcPtr, srcSize, srcIdx, destMemIdx, reqBytes);
+			break;
+		}
+
+		case Instruction::RETURNDATACOPY:
+		{
+			if (m_mode < EVM_METROPOLIS)
+				goto invalidInstruction;
+
+			auto destMemIdx = stack.pop();
+			auto srcIdx = stack.pop();
+			auto reqBytes = stack.pop();
+
+			auto srcPtr = m_builder.CreateLoad(_runtimeManager.getReturnBufDataPtr());
+			auto srcSize = m_builder.CreateLoad(_runtimeManager.getReturnBufSizePtr());
+
+			_memory.copyBytesNoPadding(srcPtr, srcSize, srcIdx, destMemIdx, reqBytes);
 			break;
 		}
 

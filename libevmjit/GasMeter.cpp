@@ -180,6 +180,7 @@ int64_t GasMeter::getStepCost(Instruction inst) const
 	case Instruction::CALLER:
 	case Instruction::CALLVALUE:
 	case Instruction::CALLDATASIZE:
+	case Instruction::RETURNDATASIZE:
 	case Instruction::CODESIZE:
 	case Instruction::GASPRICE:
 	case Instruction::COINBASE:
@@ -209,6 +210,7 @@ int64_t GasMeter::getStepCost(Instruction inst) const
 	case Instruction::BYTE:
 	case Instruction::CALLDATALOAD:
 	case Instruction::CALLDATACOPY:
+	case Instruction::RETURNDATACOPY:
 	case Instruction::CODECOPY:
 	case Instruction::MLOAD:
 	case Instruction::MSTORE:

@@ -23,6 +23,8 @@ public:
 	llvm::Value* getBytePtr(llvm::Value* _index);
 	void copyBytes(llvm::Value* _srcPtr, llvm::Value* _srcSize, llvm::Value* _srcIndex,
 				   llvm::Value* _destMemIdx, llvm::Value* _byteCount);
+	void copyBytesNoPadding(llvm::Value* _srcPtr, llvm::Value* _srcSize, llvm::Value* _srcIndex,
+							llvm::Value* _destMemIdx, llvm::Value* _byteCount);
 
 	/// Requires the amount of memory to for data defined by offset and size. And counts gas fee for that memory.
 	void require(llvm::Value* _offset, llvm::Value* _size);
