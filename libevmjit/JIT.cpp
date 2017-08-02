@@ -141,14 +141,7 @@ public:
 
 	ExecFunc compile(evm_mode _mode, bool _staticCall, byte const* _code, uint64_t _codeSize, std::string const& _codeIdentifier);
 
-	evm_query_state_fn queryFn = nullptr;
-	evm_get_storage_fn getStorageFn = nullptr;
-	evm_set_storage_fn setStorageFn = nullptr;
-	evm_selfdestruct_fn selfdestructFn = nullptr;
-	evm_call_fn callFn = nullptr;
-	evm_get_tx_context_fn getTxContextFn = nullptr;
-	evm_get_block_hash_fn getBlockHashFn = nullptr;
-	evm_log_fn logFn = nullptr;
+	evm_host const* host;
 
 	evm_message const* currentMsg = nullptr;
 };
@@ -185,7 +178,7 @@ static int64_t call_v2(
 
 	// FIXME: Handle code hash.
 	evm_result result;
-	jit.callFn(&result, _opaqueEnv, &msg);
+	jit.host->call(&result, _opaqueEnv, &msg);
 	// FIXME: Clarify when gas_left is valid.
 	int64_t r = result.gas_left;
 	if (result.code == EVM_SUCCESS || result.code == EVM_REVERT)
@@ -208,14 +201,14 @@ class SymbolResolver : public llvm::SectionMemoryManager
 		auto& jit = JITImpl::instance();
 		auto addr = llvm::StringSwitch<uint64_t>(_name)
 			.Case("env_sha3", reinterpret_cast<uint64_t>(&keccak))
-			.Case("evm.query", reinterpret_cast<uint64_t>(jit.queryFn))
-			.Case("evm.sload", reinterpret_cast<uint64_t>(jit.getStorageFn))
-			.Case("evm.sstore", reinterpret_cast<uint64_t>(jit.setStorageFn))
-			.Case("evm.selfdestruct", reinterpret_cast<uint64_t>(jit.selfdestructFn))
+			.Case("evm.query", reinterpret_cast<uint64_t>(jit.host->query))
+			.Case("evm.sload", reinterpret_cast<uint64_t>(jit.host->get_storage))
+			.Case("evm.sstore", reinterpret_cast<uint64_t>(jit.host->set_storage))
+			.Case("evm.selfdestruct", reinterpret_cast<uint64_t>(jit.host->selfdestruct))
 			.Case("evm.call", reinterpret_cast<uint64_t>(call_v2))
-			.Case("evm.get_tx_context", reinterpret_cast<uint64_t>(jit.getTxContextFn))
-			.Case("evm.blockhash", reinterpret_cast<uint64_t>(jit.getBlockHashFn))
-			.Case("evm.log", reinterpret_cast<uint64_t>(jit.logFn))
+			.Case("evm.get_tx_context", reinterpret_cast<uint64_t>(jit.host->get_tx_context))
+			.Case("evm.blockhash", reinterpret_cast<uint64_t>(jit.host->get_block_hash))
+			.Case("evm.log", reinterpret_cast<uint64_t>(jit.host->log))
 			.Default(0);
 		if (addr)
 			return {addr, llvm::JITSymbolFlags::Exported};
@@ -334,28 +327,12 @@ bytes_ref ExecutionContext::getReturnData() const
 extern "C"
 {
 
-static evm_instance* create(
-	evm_query_state_fn queryFn,
-	evm_get_storage_fn getStorageFn,
-	evm_set_storage_fn setStorageFn,
-	evm_selfdestruct_fn selfdestructFn,
-	evm_call_fn callFn,
-	evm_get_tx_context_fn getTxContextFn,
-	evm_get_block_hash_fn getBlockHashFn,
-	evm_log_fn logFn
-)
+static evm_instance* create(const evm_host* _host)
 {
 	// Let's always return the same instance. It's a bit of faking, but actually
 	// this might be a compliant implementation.
 	auto& jit = JITImpl::instance();
-	jit.queryFn = queryFn;
-	jit.getStorageFn = getStorageFn;
-	jit.setStorageFn = setStorageFn;
-	jit.selfdestructFn = selfdestructFn;
-	jit.callFn = callFn;
-	jit.getTxContextFn = getTxContextFn;
-	jit.getBlockHashFn = getBlockHashFn;
-	jit.logFn = logFn;
+	jit.host = _host;
 	return &jit;
 }
 
