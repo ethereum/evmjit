@@ -53,7 +53,8 @@ char modeToChar(evm_mode mode)
 	case EVM_HOMESTEAD: return 'H';
 	case EVM_ANTI_DOS: return 'A';
 	case EVM_CLEARING: return 'C';
-	case EVM_METROPOLIS: return 'M';
+	case EVM_BYZANTIUM: return 'B';
+	case EVM_CONSTANTINOPLE: return 'K';
 	}
 	LLVM_BUILTIN_UNREACHABLE;
 }
