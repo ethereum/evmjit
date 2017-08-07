@@ -216,6 +216,7 @@ class SymbolResolver : public llvm::SectionMemoryManager
 			.Case("evm.query", reinterpret_cast<uint64_t>(jit.host->query))
 			.Case("evm.sload", reinterpret_cast<uint64_t>(jit.host->get_storage))
 			.Case("evm.sstore", reinterpret_cast<uint64_t>(jit.host->set_storage))
+			.Case("evm.balance", reinterpret_cast<uint64_t>(jit.host->get_balance))
 			.Case("evm.selfdestruct", reinterpret_cast<uint64_t>(jit.host->selfdestruct))
 			.Case("evm.call", reinterpret_cast<uint64_t>(call_v2))
 			.Case("evm.get_tx_context", reinterpret_cast<uint64_t>(jit.host->get_tx_context))

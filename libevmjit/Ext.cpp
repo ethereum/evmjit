@@ -122,6 +122,25 @@ llvm::Function* getSetStorageFunc(llvm::Module* _module)
 	return func;
 }
 
+llvm::Function* getGetBalanceFunc(llvm::Module* _module)
+{
+	static const auto funcName = "evm.balance";
+	auto func = _module->getFunction(funcName);
+	if (!func)
+	{
+		auto addrTy = llvm::IntegerType::get(_module->getContext(), 160);
+		auto fty = llvm::FunctionType::get(
+			Type::Void, {Type::WordPtr, Type::EnvPtr, addrTy->getPointerTo()}, false);
+		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, _module);
+		func->addAttribute(1, llvm::Attribute::NoAlias);
+		func->addAttribute(1, llvm::Attribute::NoCapture);
+		func->addAttribute(3, llvm::Attribute::ReadOnly);
+		func->addAttribute(3, llvm::Attribute::NoAlias);
+		func->addAttribute(3, llvm::Attribute::NoCapture);
+	}
+	return func;
+}
+
 llvm::Function* getSelfdestructFunc(llvm::Module* _module)
 {
 	static const auto funcName = "evm.selfdestruct";
@@ -238,7 +257,7 @@ llvm::Function* getCallFunc(llvm::Module* _module)
 		builder.SetInsertPoint(entryBB);
 		auto v = builder.CreateAlloca(Type::Word);
 		auto addrAlloca = builder.CreateBitCast(builder.CreateAlloca(Type::Word), addrPtrTy);
-		auto queryFn = getQueryFunc(_module);
+		auto getBalanceFn = getGetBalanceFunc(_module);
 		auto depthOk = builder.CreateICmpSLT(&depth, builder.getInt64(1024));
 		builder.CreateCondBr(depthOk, checkTransferBB, failBB);
 
@@ -251,7 +270,7 @@ llvm::Function* getCallFunc(llvm::Module* _module)
 
 		builder.SetInsertPoint(checkBalanceBB);
 		builder.CreateStore(&addr, addrAlloca);
-		builder.CreateCall(queryFn, {v, &env, builder.getInt32(EVM_BALANCE), addrAlloca});
+		builder.CreateCall(getBalanceFn, {v, &env, addrAlloca});
 		llvm::Value* balance = builder.CreateLoad(v);
 		balance = Endianness::toNative(builder, balance);
 		value = Endianness::toNative(builder, value);
@@ -401,13 +420,13 @@ llvm::Value* Ext::calldataload(llvm::Value* _idx)
 
 llvm::Value* Ext::balance(llvm::Value* _address)
 {
-	auto func = getQueryFunc(getModule());
+	auto func = getGetBalanceFunc(getModule());
 	auto addrTy = m_builder.getIntNTy(160);
 	auto address = Endianness::toBE(m_builder, m_builder.CreateTrunc(_address, addrTy));
 	auto pResult = getArgAlloca();
 	auto pAddr = m_builder.CreateBitCast(getArgAlloca(), addrTy->getPointerTo());
 	m_builder.CreateStore(address, pAddr);
-	createCABICall(func, {pResult, getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_BALANCE), pAddr});
+	createCABICall(func, {pResult, getRuntimeManager().getEnvPtr(), pAddr});
 	return Endianness::toNative(m_builder, m_builder.CreateLoad(pResult));
 }
 
