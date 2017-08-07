@@ -185,14 +185,11 @@ static int64_t call_v2(
 	jit.host->call(&result, _opaqueEnv, &msg);
 	// FIXME: Clarify when gas_left is valid.
 	int64_t r = result.gas_left;
-	if (result.code == EVM_SUCCESS || result.code == EVM_REVERT)
-	{
-		auto size = std::min(_outputSize, result.output_size);
-		std::copy(result.output_data, result.output_data + size, _outputData);
-		jit.returnBuffer = {result.output_data, result.output_data + result.output_size};
-	}
-	else
-		jit.returnBuffer.clear();
+
+	// Handle output. It can contain data from RETURN or REVERT opcodes.
+	auto size = std::min(_outputSize, result.output_size);
+	std::copy(result.output_data, result.output_data + size, _outputData);
+	jit.returnBuffer = {result.output_data, result.output_data + result.output_size};
 
 	*o_bufData = jit.returnBuffer.data();
 	*o_bufSize = jit.returnBuffer.size();
