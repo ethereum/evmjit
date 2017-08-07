@@ -141,6 +141,25 @@ llvm::Function* getGetBalanceFunc(llvm::Module* _module)
 	return func;
 }
 
+llvm::Function* getGetCodeFunc(llvm::Module* _module)
+{
+	static const auto funcName = "evm.code";
+	auto func = _module->getFunction(funcName);
+	if (!func)
+	{
+		auto addrTy = llvm::IntegerType::get(_module->getContext(), 160);
+		auto fty = llvm::FunctionType::get(
+			Type::Size, {Type::BytePtr->getPointerTo(), Type::EnvPtr, addrTy->getPointerTo()}, false);
+		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, _module);
+		func->addAttribute(1, llvm::Attribute::NoAlias);
+		func->addAttribute(1, llvm::Attribute::NoCapture);
+		func->addAttribute(3, llvm::Attribute::ReadOnly);
+		func->addAttribute(3, llvm::Attribute::NoAlias);
+		func->addAttribute(3, llvm::Attribute::NoCapture);
+	}
+	return func;
+}
+
 llvm::Function* getSelfdestructFunc(llvm::Module* _module)
 {
 	static const auto funcName = "evm.selfdestruct";
@@ -177,15 +196,6 @@ llvm::Function* getLogFunc(llvm::Module* _module)
 		func->addAttribute(5, llvm::Attribute::NoCapture);
 	}
 	return func;
-}
-
-llvm::StructType* getMemRefTy(llvm::Module* _module)
-{
-	static const auto name = "evm.memref";
-	auto ty = _module->getTypeByName(name);
-	if (!ty)
-		ty = llvm::StructType::create({Type::BytePtr, Type::Size}, name);
-	return ty;
 }
 
 llvm::Function* getCallFunc(llvm::Module* _module)
@@ -463,34 +473,28 @@ llvm::Value* Ext::sha3(llvm::Value* _inOff, llvm::Value* _inSize)
 
 MemoryRef Ext::extcode(llvm::Value* _address)
 {
-	auto func = getQueryFunc(getModule());
+	auto func = getGetCodeFunc(getModule());
 	auto addrTy = m_builder.getIntNTy(160);
 	auto address = Endianness::toBE(m_builder, m_builder.CreateTrunc(_address, addrTy));
 	auto pAddr = m_builder.CreateBitCast(getArgAlloca(), addrTy->getPointerTo());
 	m_builder.CreateStore(address, pAddr);
-	auto vPtr = getArgAlloca();
-	createCABICall(func, {vPtr, getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_CODE_BY_ADDRESS), pAddr});
-	auto memRefTy = getMemRefTy(getModule());
-	auto memRefPtr = m_builder.CreateBitCast(vPtr, memRefTy->getPointerTo());
-	auto memRef = m_builder.CreateLoad(memRefTy, memRefPtr, "memref");
-	auto code = m_builder.CreateExtractValue(memRef, 0, "code");
-	auto size = m_builder.CreateExtractValue(memRef, 1, "codesize");
+	auto a = getArgAlloca();
+	auto codePtrPtr = m_builder.CreateBitCast(a, Type::BytePtr->getPointerTo());
+	auto size = createCABICall(func, {codePtrPtr, getRuntimeManager().getEnvPtr(), pAddr});
+	auto code = m_builder.CreateLoad(codePtrPtr, "code");
 	auto size256 = m_builder.CreateZExt(size, Type::Word);
 	return {code, size256};
 }
 
 llvm::Value* Ext::extcodesize(llvm::Value* _address)
 {
-	auto func = getQueryFunc(getModule());
+	auto func = getGetCodeFunc(getModule());
 	auto addrTy = m_builder.getIntNTy(160);
 	auto address = Endianness::toBE(m_builder, m_builder.CreateTrunc(_address, addrTy));
 	auto pAddr = m_builder.CreateBitCast(getArgAlloca(), addrTy->getPointerTo());
 	m_builder.CreateStore(address, pAddr);
-	auto vPtr = getArgAlloca();
-	createCABICall(func, {vPtr, getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_CODE_SIZE), pAddr});
-	auto int64ty = m_builder.getInt64Ty();
-	auto sizePtr = m_builder.CreateBitCast(vPtr, int64ty->getPointerTo());
-	auto size = m_builder.CreateLoad(int64ty, sizePtr, "codesize");
+	auto ignoreCode = llvm::ConstantPointerNull::get(Type::BytePtr->getPointerTo());
+	auto size = createCABICall(func, {ignoreCode, getRuntimeManager().getEnvPtr(), pAddr});
 	return m_builder.CreateZExt(size, Type::Word);
 }
 
