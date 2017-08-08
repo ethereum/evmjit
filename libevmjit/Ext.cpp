@@ -59,9 +59,9 @@ llvm::Function* createFunc(EnvFunc _id, llvm::Module* _module)
 	return llvm::Function::Create(std::get<1>(desc), llvm::Function::ExternalLinkage, std::get<0>(desc), _module);
 }
 
-llvm::Function* getQueryFunc(llvm::Module* _module)
+llvm::Function* getAccountExistsFunc(llvm::Module* _module)
 {
-	static const auto funcName = "evm.query";
+	static const auto funcName = "evm.exists";
 	auto func = _module->getFunction(funcName);
 	if (!func)
 	{
@@ -69,13 +69,8 @@ llvm::Function* getQueryFunc(llvm::Module* _module)
 		auto i32 = llvm::IntegerType::getInt32Ty(_module->getContext());
 		auto addrTy = llvm::IntegerType::get(_module->getContext(), 160);
 		auto fty = llvm::FunctionType::get(
-				Type::Void, {Type::WordPtr, Type::EnvPtr, i32, addrTy->getPointerTo()}, false);
+				i32, {Type::EnvPtr, addrTy->getPointerTo()}, false);
 		func = llvm::Function::Create(fty, llvm::Function::ExternalLinkage, funcName, _module);
-		func->addAttribute(1, llvm::Attribute::NoAlias);
-		func->addAttribute(1, llvm::Attribute::NoCapture);
-		func->addAttribute(4, llvm::Attribute::ReadOnly);
-		func->addAttribute(4, llvm::Attribute::NoAlias);
-		func->addAttribute(4, llvm::Attribute::NoCapture);
 	}
 	return func;
 }
@@ -442,14 +437,13 @@ llvm::Value* Ext::balance(llvm::Value* _address)
 
 llvm::Value* Ext::exists(llvm::Value* _address)
 {
-	auto func = getQueryFunc(getModule());
+	auto func = getAccountExistsFunc(getModule());
 	auto addrTy = m_builder.getIntNTy(160);
 	auto address = Endianness::toBE(m_builder, m_builder.CreateTrunc(_address, addrTy));
-	auto pResult = getArgAlloca();
 	auto pAddr = m_builder.CreateBitCast(getArgAlloca(), addrTy->getPointerTo());
 	m_builder.CreateStore(address, pAddr);
-	createCABICall(func, {pResult, getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_ACCOUNT_EXISTS), pAddr});
-	return m_builder.CreateTrunc(m_builder.CreateLoad(pResult), m_builder.getInt1Ty());
+	auto r = createCABICall(func, {getRuntimeManager().getEnvPtr(), pAddr});
+	return m_builder.CreateTrunc(r, m_builder.getInt1Ty());
 }
 
 llvm::Value* Ext::blockHash(llvm::Value* _number)
