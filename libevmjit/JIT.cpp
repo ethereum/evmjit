@@ -30,7 +30,6 @@ static_assert(offsetof(evm_message, code_hash) % 8 == 0, "evm_message.code_hash 
 
 // Check enums match int size.
 // On GCC/clang the underlying type should be unsigned int, on MSVC int
-static_assert(sizeof(evm_query_key)  == sizeof(int), "Enum `evm_query_key` is not the size of int");
 static_assert(sizeof(evm_call_kind)  == sizeof(int), "Enum `evm_call_kind` is not the size of int");
 static_assert(sizeof(evm_mode)       == sizeof(int), "Enum `evm_mode` is not the size of int");
 
@@ -210,9 +209,11 @@ class SymbolResolver : public llvm::SectionMemoryManager
 		auto& jit = JITImpl::instance();
 		auto addr = llvm::StringSwitch<uint64_t>(_name)
 			.Case("env_sha3", reinterpret_cast<uint64_t>(&keccak))
-			.Case("evm.query", reinterpret_cast<uint64_t>(jit.host->query))
+			.Case("evm.exists", reinterpret_cast<uint64_t>(jit.host->account_exists))
 			.Case("evm.sload", reinterpret_cast<uint64_t>(jit.host->get_storage))
 			.Case("evm.sstore", reinterpret_cast<uint64_t>(jit.host->set_storage))
+			.Case("evm.balance", reinterpret_cast<uint64_t>(jit.host->get_balance))
+			.Case("evm.code", reinterpret_cast<uint64_t>(jit.host->get_code))
 			.Case("evm.selfdestruct", reinterpret_cast<uint64_t>(jit.host->selfdestruct))
 			.Case("evm.call", reinterpret_cast<uint64_t>(call_v2))
 			.Case("evm.get_tx_context", reinterpret_cast<uint64_t>(jit.host->get_tx_context))
