@@ -15,7 +15,7 @@ namespace eth
 namespace jit
 {
 
-GasMeter::GasMeter(IRBuilder& _builder, RuntimeManager& _runtimeManager, evm_mode mode):
+GasMeter::GasMeter(IRBuilder& _builder, RuntimeManager& _runtimeManager, evm_revision mode):
 	CompilerHelper(_builder),
 	m_runtimeManager(_runtimeManager),
     m_mode(mode)

@@ -31,7 +31,7 @@ static_assert(offsetof(evm_message, code_hash) % 8 == 0, "evm_message.code_hash 
 // Check enums match int size.
 // On GCC/clang the underlying type should be unsigned int, on MSVC int
 static_assert(sizeof(evm_call_kind)  == sizeof(int), "Enum `evm_call_kind` is not the size of int");
-static_assert(sizeof(evm_mode)       == sizeof(int), "Enum `evm_mode` is not the size of int");
+static_assert(sizeof(evm_revision)       == sizeof(int), "Enum `evm_revision` is not the size of int");
 
 
 namespace dev
@@ -44,7 +44,7 @@ namespace
 {
 using ExecFunc = ReturnCode(*)(ExecutionContext*);
 
-char modeToChar(evm_mode mode)
+char modeToChar(evm_revision mode)
 {
 	switch (mode)
 	{
@@ -59,7 +59,7 @@ char modeToChar(evm_mode mode)
 }
 
 /// Combine code hash and compatibility mode into a printable code identifier.
-std::string makeCodeId(evm_uint256be codeHash, evm_mode mode, uint32_t flags)
+std::string makeCodeId(evm_uint256be codeHash, evm_revision mode, uint32_t flags)
 {
 	static const auto hexChars = "0123456789abcdef";
 	std::string str;
@@ -139,7 +139,7 @@ public:
 	ExecFunc getExecFunc(std::string const& _codeIdentifier) const;
 	void mapExecFunc(std::string const& _codeIdentifier, ExecFunc _funcAddr);
 
-	ExecFunc compile(evm_mode _mode, bool _staticCall, byte const* _code, uint64_t _codeSize, std::string const& _codeIdentifier);
+	ExecFunc compile(evm_revision _mode, bool _staticCall, byte const* _code, uint64_t _codeSize, std::string const& _codeIdentifier);
 
 	evm_host const* host;
 
@@ -281,7 +281,7 @@ void JITImpl::mapExecFunc(std::string const& _codeIdentifier, ExecFunc _funcAddr
 	m_codeMap.emplace(_codeIdentifier, _funcAddr);
 }
 
-ExecFunc JITImpl::compile(evm_mode _mode, bool _staticCall, byte const* _code, uint64_t _codeSize,
+ExecFunc JITImpl::compile(evm_revision _mode, bool _staticCall, byte const* _code, uint64_t _codeSize,
 	std::string const& _codeIdentifier)
 {
 	auto module = Cache::getObject(_codeIdentifier, getLLVMContext());
@@ -352,7 +352,7 @@ static void destroy(evm_instance* instance)
 	assert(instance == static_cast<void*>(&JITImpl::instance()));
 }
 
-static evm_result execute(evm_instance* instance, evm_context* context, evm_mode mode,
+static evm_result execute(evm_instance* instance, evm_context* context, evm_revision mode,
 	evm_message const* msg, uint8_t const* code, size_t code_size)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
@@ -446,7 +446,7 @@ static int set_option(evm_instance* instance, char const* name,
 }
 
 static evm_code_status get_code_status(evm_instance* instance,
-	evm_mode mode, uint32_t flags, evm_uint256be code_hash)
+	evm_revision mode, uint32_t flags, evm_uint256be code_hash)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
 	auto codeIdentifier = makeCodeId(code_hash, mode, flags);
@@ -456,7 +456,7 @@ static evm_code_status get_code_status(evm_instance* instance,
 	return EVM_UNKNOWN;
 }
 
-static void prepare_code(evm_instance* instance, evm_mode mode, uint32_t flags,
+static void prepare_code(evm_instance* instance, evm_revision mode, uint32_t flags,
 	evm_uint256be code_hash, unsigned char const* code, size_t code_size)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);

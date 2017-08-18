@@ -30,7 +30,7 @@ namespace jit
 
 static const auto c_destIdxLabel = "destIdx";
 
-Compiler::Compiler(Options const& _options, evm_mode _mode, bool _staticCall, llvm::LLVMContext& _llvmContext):
+Compiler::Compiler(Options const& _options, evm_revision _mode, bool _staticCall, llvm::LLVMContext& _llvmContext):
 	m_options(_options),
 	m_mode(_mode),
 	m_staticCall(_staticCall),
