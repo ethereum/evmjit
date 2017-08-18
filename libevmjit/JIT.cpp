@@ -148,7 +148,7 @@ public:
 };
 
 static int64_t call_v2(
-	evm_env* _opaqueEnv,
+	evm_context* _ctx,
 	evm_call_kind _kind,
 	int64_t _gas,
 	evm_uint160be const* _address,
@@ -181,7 +181,7 @@ static int64_t call_v2(
 
 	// FIXME: Handle code hash.
 	evm_result result;
-	jit.host->call(&result, _opaqueEnv, &msg);
+	jit.host->call(&result, _ctx, &msg);
 	// FIXME: Clarify when gas_left is valid.
 	int64_t r = result.gas_left;
 
@@ -352,7 +352,7 @@ static void destroy(evm_instance* instance)
 	assert(instance == static_cast<void*>(&JITImpl::instance()));
 }
 
-static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
+static evm_result execute(evm_instance* instance, evm_context* context, evm_mode mode,
 	evm_message const* msg, uint8_t const* code, size_t code_size)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
@@ -374,7 +374,7 @@ static evm_result execute(evm_instance* instance, evm_env* env, evm_mode mode,
 	std::memcpy(&rt.caller[12], &msg->sender, sizeof(msg->sender));
 	rt.depth = msg->depth;
 
-	ExecutionContext ctx{rt, env};
+	ExecutionContext ctx{rt, context};
 
 	evm_result result;
 	result.code = EVM_SUCCESS;

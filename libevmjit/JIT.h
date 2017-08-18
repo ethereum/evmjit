@@ -109,12 +109,12 @@ class ExecutionContext
 {
 public:
 	ExecutionContext() = default;
-	ExecutionContext(RuntimeData& _data, evm_env* _env) { init(_data, _env); }
+	ExecutionContext(RuntimeData& _data, evm_context* _ctx) { init(_data, _ctx); }
 	ExecutionContext(ExecutionContext const&) = delete;
 	ExecutionContext& operator=(ExecutionContext const&) = delete;
 	~ExecutionContext() noexcept;
 
-	void init(RuntimeData& _data, evm_env* _env) { m_data = &_data; m_env = _env; }
+	void init(RuntimeData& _data, evm_context* _ctx) { m_data = &_data; m_ctx = _ctx; }
 
 	byte const* code() const { return m_data->code; }
 	uint64_t codeSize() const { return m_data->codeSize; }
@@ -123,7 +123,7 @@ public:
 
 public:
 	RuntimeData* m_data = nullptr;	///< Pointer to data. Expected by compiled contract.
-	evm_env* m_env = nullptr;		///< Pointer to environment proxy. Expected by compiled contract.
+	evm_context* m_ctx = nullptr;	///< Pointer to Host execution context. Expected by compiled contract.
 	byte* m_memData = nullptr;
 	uint64_t m_memSize = 0;
 	uint64_t m_memCap = 0;
