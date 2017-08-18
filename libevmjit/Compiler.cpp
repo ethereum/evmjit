@@ -787,7 +787,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 
 			_gasMeter.commitCostBlock();
 			auto gas = _runtimeManager.getGas();
-			llvm::Value* gasKept = (m_mode >= EVM_ANTI_DOS) ?
+			llvm::Value* gasKept = (m_mode >= EVM_TANGERINE_WHISTLE) ?
 			                       m_builder.CreateLShr(gas, 6) :
 			                       m_builder.getInt64(0);
 			auto createGas = m_builder.CreateSub(gas, gasKept, "create.gas", true, true);
@@ -860,7 +860,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			{
 				auto accountExists = _ext.exists(address);
 				auto noPenaltyCond = accountExists;
-				if (m_mode >= EVM_CLEARING)
+				if (m_mode >= EVM_SPURIOUS_DRAGON)
 					noPenaltyCond = m_builder.CreateOr(accountExists, noTransfer);
 				auto penalty = m_builder.CreateSelect(noPenaltyCond,
 				                                      m_builder.getInt64(0),
@@ -869,7 +869,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 				                _runtimeManager.getGasPtr());
 			}
 
-			if (m_mode >= EVM_ANTI_DOS)
+			if (m_mode >= EVM_TANGERINE_WHISTLE)
 			{
 				auto gas = _runtimeManager.getGas();
 				auto gas64th = m_builder.CreateLShr(gas, 6);
@@ -935,11 +935,11 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 				goto invalidInstruction;
 
 			auto dest = stack.pop();
-			if (m_mode >= EVM_ANTI_DOS)
+			if (m_mode >= EVM_TANGERINE_WHISTLE)
 			{
 				auto destExists = _ext.exists(dest);
 				auto noPenaltyCond = destExists;
-				if (m_mode >= EVM_CLEARING)
+				if (m_mode >= EVM_SPURIOUS_DRAGON)
 				{
 					auto addr = Endianness::toNative(m_builder, _runtimeManager.getAddress());
 					auto balance = _ext.balance(addr);

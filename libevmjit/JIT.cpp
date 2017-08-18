@@ -50,8 +50,8 @@ char modeToChar(evm_revision mode)
 	{
 	case EVM_FRONTIER: return 'F';
 	case EVM_HOMESTEAD: return 'H';
-	case EVM_ANTI_DOS: return 'A';
-	case EVM_CLEARING: return 'C';
+	case EVM_TANGERINE_WHISTLE: return 'A';
+	case EVM_SPURIOUS_DRAGON: return 'C';
 	case EVM_BYZANTIUM: return 'B';
 	case EVM_CONSTANTINOPLE: return 'K';
 	}
