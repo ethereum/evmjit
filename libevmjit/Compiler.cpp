@@ -30,9 +30,9 @@ namespace jit
 
 static const auto c_destIdxLabel = "destIdx";
 
-Compiler::Compiler(Options const& _options, evm_revision _mode, bool _staticCall, llvm::LLVMContext& _llvmContext):
+Compiler::Compiler(Options const& _options, evm_revision _rev, bool _staticCall, llvm::LLVMContext& _llvmContext):
 	m_options(_options),
-	m_mode(_mode),
+	m_rev(_rev),
 	m_staticCall(_staticCall),
 	m_builder(_llvmContext)
 {
@@ -176,7 +176,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(code_iterator _begin, code_itera
 
 	// Init runtime structures.
 	RuntimeManager runtimeManager(m_builder, _begin, _end);
-	GasMeter gasMeter(m_builder, runtimeManager, m_mode);
+	GasMeter gasMeter(m_builder, runtimeManager, m_rev);
 	Memory memory(runtimeManager, gasMeter);
 	Ext ext(runtimeManager, memory);
 	Arith256 arith(m_builder);
@@ -673,7 +673,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 
 		case Instruction::RETURNDATASIZE:
 		{
-			if (m_mode < EVM_BYZANTIUM)
+			if (m_rev < EVM_BYZANTIUM)
 				goto invalidInstruction;
 
 			auto returnBufSizePtr = _runtimeManager.getReturnBufSizePtr();
@@ -727,7 +727,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 
 		case Instruction::RETURNDATACOPY:
 		{
-			if (m_mode < EVM_BYZANTIUM)
+			if (m_rev < EVM_BYZANTIUM)
 				goto invalidInstruction;
 
 			auto destMemIdx = stack.pop();
@@ -787,7 +787,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 
 			_gasMeter.commitCostBlock();
 			auto gas = _runtimeManager.getGas();
-			llvm::Value* gasKept = (m_mode >= EVM_TANGERINE_WHISTLE) ?
+			llvm::Value* gasKept = (m_rev >= EVM_TANGERINE_WHISTLE) ?
 			                       m_builder.CreateLShr(gas, 6) :
 			                       m_builder.getInt64(0);
 			auto createGas = m_builder.CreateSub(gas, gasKept, "create.gas", true, true);
@@ -819,10 +819,10 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 		case Instruction::STATICCALL:
 		{
 			// Handle invalid instructions.
-			if (inst == Instruction::DELEGATECALL && m_mode < EVM_HOMESTEAD)
+			if (inst == Instruction::DELEGATECALL && m_rev < EVM_HOMESTEAD)
 				goto invalidInstruction;
 
-			if (inst == Instruction::STATICCALL && m_mode < EVM_BYZANTIUM)
+			if (inst == Instruction::STATICCALL && m_rev < EVM_BYZANTIUM)
 				goto invalidInstruction;
 
 			auto callGas = stack.pop();
@@ -860,7 +860,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			{
 				auto accountExists = _ext.exists(address);
 				auto noPenaltyCond = accountExists;
-				if (m_mode >= EVM_SPURIOUS_DRAGON)
+				if (m_rev >= EVM_SPURIOUS_DRAGON)
 					noPenaltyCond = m_builder.CreateOr(accountExists, noTransfer);
 				auto penalty = m_builder.CreateSelect(noPenaltyCond,
 				                                      m_builder.getInt64(0),
@@ -869,7 +869,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 				                _runtimeManager.getGasPtr());
 			}
 
-			if (m_mode >= EVM_TANGERINE_WHISTLE)
+			if (m_rev >= EVM_TANGERINE_WHISTLE)
 			{
 				auto gas = _runtimeManager.getGas();
 				auto gas64th = m_builder.CreateLShr(gas, 6);
@@ -916,7 +916,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 		case Instruction::REVERT:
 		{
 			auto const isRevert = inst == Instruction::REVERT;
-			if (isRevert && m_mode < EVM_BYZANTIUM)
+			if (isRevert && m_rev < EVM_BYZANTIUM)
 				goto invalidInstruction;
 
 			auto index = stack.pop();
@@ -935,11 +935,11 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 				goto invalidInstruction;
 
 			auto dest = stack.pop();
-			if (m_mode >= EVM_TANGERINE_WHISTLE)
+			if (m_rev >= EVM_TANGERINE_WHISTLE)
 			{
 				auto destExists = _ext.exists(dest);
 				auto noPenaltyCond = destExists;
-				if (m_mode >= EVM_SPURIOUS_DRAGON)
+				if (m_rev >= EVM_SPURIOUS_DRAGON)
 				{
 					auto addr = Endianness::toNative(m_builder, _runtimeManager.getAddress());
 					auto balance = _ext.balance(addr);

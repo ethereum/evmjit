@@ -15,10 +15,10 @@ namespace eth
 namespace jit
 {
 
-GasMeter::GasMeter(IRBuilder& _builder, RuntimeManager& _runtimeManager, evm_revision mode):
+GasMeter::GasMeter(IRBuilder& _builder, RuntimeManager& _runtimeManager, evm_revision rev):
 	CompilerHelper(_builder),
 	m_runtimeManager(_runtimeManager),
-    m_mode(mode)
+    m_rev(rev)
 {
 	llvm::Type* gasCheckArgs[] = {Type::Gas->getPointerTo(), Type::Gas, Type::BytePtr};
 	m_gasCheckFunc = llvm::Function::Create(llvm::FunctionType::get(Type::Void, gasCheckArgs, false), llvm::Function::PrivateLinkage, "gas.check", getModule());
@@ -90,7 +90,7 @@ void GasMeter::countExp(llvm::Value* _exponent)
 	auto lz = m_builder.CreateTrunc(lz256, Type::Gas, "lz");
 	auto sigBits = m_builder.CreateSub(m_builder.getInt64(256), lz, "sigBits");
 	auto sigBytes = m_builder.CreateUDiv(m_builder.CreateAdd(sigBits, m_builder.getInt64(7)), m_builder.getInt64(8));
-	auto exponentByteCost = m_mode >= EVM_SPURIOUS_DRAGON ? 50 : JITSchedule::expByteGas::value;
+	auto exponentByteCost = m_rev >= EVM_SPURIOUS_DRAGON ? 50 : JITSchedule::expByteGas::value;
 	count(m_builder.CreateNUWMul(sigBytes, m_builder.getInt64(exponentByteCost)));
 }
 
@@ -242,11 +242,11 @@ int64_t GasMeter::getStepCost(Instruction inst) const
 
 	// Tier 6
 	case Instruction::BALANCE:
-		return m_mode >= EVM_TANGERINE_WHISTLE ? 400 : JITSchedule::stepGas6::value;
+		return m_rev >= EVM_TANGERINE_WHISTLE ? 400 : JITSchedule::stepGas6::value;
 
 	case Instruction::EXTCODESIZE:
 	case Instruction::EXTCODECOPY:
-		return m_mode >= EVM_TANGERINE_WHISTLE ? 700 : JITSchedule::stepGas6::value;
+		return m_rev >= EVM_TANGERINE_WHISTLE ? 700 : JITSchedule::stepGas6::value;
 
 	case Instruction::BLOCKHASH:
 		return JITSchedule::stepGas6::value;
@@ -255,7 +255,7 @@ int64_t GasMeter::getStepCost(Instruction inst) const
 		return JITSchedule::sha3Gas::value;
 
 	case Instruction::SLOAD:
-		return m_mode >= EVM_TANGERINE_WHISTLE ? 200 : JITSchedule::sloadGas::value;
+		return m_rev >= EVM_TANGERINE_WHISTLE ? 200 : JITSchedule::sloadGas::value;
 
 	case Instruction::JUMPDEST:
 		return JITSchedule::jumpdestGas::value;
@@ -274,13 +274,13 @@ int64_t GasMeter::getStepCost(Instruction inst) const
 	case Instruction::CALLCODE:
 	case Instruction::DELEGATECALL:
 	case Instruction::STATICCALL:
-		return m_mode >= EVM_TANGERINE_WHISTLE ? 700 : JITSchedule::callGas::value;
+		return m_rev >= EVM_TANGERINE_WHISTLE ? 700 : JITSchedule::callGas::value;
 
 	case Instruction::CREATE:
 		return JITSchedule::createGas::value;
 
 	case Instruction::SUICIDE:
-		return m_mode >= EVM_TANGERINE_WHISTLE ? 5000 : JITSchedule::stepGas0::value;
+		return m_rev >= EVM_TANGERINE_WHISTLE ? 5000 : JITSchedule::stepGas0::value;
 
 	default:
 		// For invalid instruction just return 0.
