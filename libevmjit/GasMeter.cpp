@@ -249,7 +249,7 @@ int64_t GasMeter::getStepCost(Instruction inst) const
 		return m_rev >= EVM_TANGERINE_WHISTLE ? 700 : JITSchedule::stepGas6::value;
 
 	case Instruction::BLOCKHASH:
-		return JITSchedule::stepGas6::value;
+		return m_rev >= EVM_CONSTANTINOPLE ? 800 : JITSchedule::stepGas6::value;
 
 	case Instruction::SHA3:
 		return JITSchedule::sha3Gas::value;
