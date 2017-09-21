@@ -141,7 +141,7 @@ public:
 
 	ExecFunc compile(evm_revision _rev, bool _staticCall, byte const* _code, uint64_t _codeSize, std::string const& _codeIdentifier);
 
-	evm_host const* host;
+	evm_host const* host = nullptr;
 
 	evm_message const* currentMsg = nullptr;
 	std::vector<uint8_t> returnBuffer;
@@ -337,13 +337,11 @@ bytes_ref ExecutionContext::getReturnData() const
 extern "C"
 {
 
-static evm_instance* create(const evm_host* _host)
+static evm_instance* create()
 {
 	// Let's always return the same instance. It's a bit of faking, but actually
 	// this might be a compliant implementation.
-	auto& jit = JITImpl::instance();
-	jit.host = _host;
-	return &jit;
+	return &JITImpl::instance();
 }
 
 static void destroy(evm_instance* instance)
@@ -356,6 +354,9 @@ static evm_result execute(evm_instance* instance, evm_context* context, evm_revi
 	evm_message const* msg, uint8_t const* code, size_t code_size)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
+	if (!jit.host)
+		jit.host = context->fn_table;
+	assert(jit.host == context->fn_table);  // Require the fn_table not to change.
 
 	// TODO: Temporary keep track of the current message.
 	evm_message const* prevMsg = jit.currentMsg;
