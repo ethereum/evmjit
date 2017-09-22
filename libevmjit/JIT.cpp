@@ -337,7 +337,7 @@ bytes_ref ExecutionContext::getReturnData() const
 extern "C"
 {
 
-static evm_instance* create()
+EXPORT evm_instance* evmjit_create()
 {
 	// Let's always return the same instance. It's a bit of faking, but actually
 	// this might be a compliant implementation.
@@ -466,11 +466,6 @@ static void prepare_code(evm_instance* instance, evm_revision rev, uint32_t flag
 	auto execFunc = jit.compile(rev, staticCall, code, code_size, codeIdentifier);
 	if (execFunc) // FIXME: What with error?
 		jit.mapExecFunc(codeIdentifier, execFunc);
-}
-
-EXPORT evm_factory evmjit_get_factory()
-{
-	return {create};
 }
 
 }  // extern "C"
