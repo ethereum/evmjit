@@ -470,13 +470,14 @@ static void prepare_code(evm_instance* instance, evm_revision rev, uint32_t flag
 
 EXPORT evm_factory evmjit_get_factory()
 {
-	return {EVM_ABI_VERSION, create};
+	return {create};
 }
 
 }  // extern "C"
 
 JITImpl::JITImpl():
-		evm_instance({evmjit::destroy,
+		evm_instance({EVM_ABI_VERSION,
+		              evmjit::destroy,
 		              evmjit::execute,
 		              evmjit::get_code_status,
 		              evmjit::prepare_code,
