@@ -141,7 +141,7 @@ public:
 
 	ExecFunc compile(evm_revision _rev, bool _staticCall, byte const* _code, uint64_t _codeSize, std::string const& _codeIdentifier);
 
-	evm_host const* host = nullptr;
+	evm_context_fn_table const* host = nullptr;
 
 	evm_message const* currentMsg = nullptr;
 	std::vector<uint8_t> returnBuffer;
