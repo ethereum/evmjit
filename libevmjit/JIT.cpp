@@ -193,7 +193,7 @@ static int64_t call_v2(
 	*o_bufData = jit.returnBuffer.data();
 	*o_bufSize = jit.returnBuffer.size();
 
-	if (result.code != EVM_SUCCESS)
+	if (result.status_code != EVM_SUCCESS)
 		r |= EVM_CALL_FAILURE;
 
 	if (result.release)
@@ -378,7 +378,7 @@ static evm_result execute(evm_instance* instance, evm_context* context, evm_revi
 	ExecutionContext ctx{rt, context};
 
 	evm_result result;
-	result.code = EVM_SUCCESS;
+	result.status_code = EVM_SUCCESS;
 	result.gas_left = 0;
 	result.output_data = nullptr;
 	result.output_size = 0;
@@ -399,14 +399,14 @@ static evm_result execute(evm_instance* instance, evm_context* context, evm_revi
 
 	if (returnCode == ReturnCode::Revert)
 	{
-		result.code = EVM_REVERT;
+		result.status_code = EVM_REVERT;
 		result.gas_left = rt.gas;
 	}
 	else if (returnCode == ReturnCode::OutOfGas)
 	{
 		// EVMJIT does not provide information what exactly type of failure
 		// it was, so use generic EVM_FAILURE.
-		result.code = EVM_FAILURE;
+		result.status_code = EVM_FAILURE;
 	}
 	else
 	{
