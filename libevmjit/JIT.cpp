@@ -23,7 +23,7 @@
 
 
 static_assert(sizeof(evm_uint256be) == 32, "evm_uint256be is too big");
-static_assert(sizeof(evm_uint160be) == 20, "evm_uint160be is too big");
+static_assert(sizeof(evm_address) == 20, "evm_address is too big");
 static_assert(sizeof(evm_result) == 64, "evm_result does not fit cache line");
 static_assert(sizeof(evm_message) <= 18*8, "evm_message not optimally packed");
 static_assert(offsetof(evm_message, code_hash) % 8 == 0, "evm_message.code_hash not aligned");
@@ -151,7 +151,7 @@ static int64_t call_v2(
 	evm_context* _ctx,
 	evm_call_kind _kind,
 	int64_t _gas,
-	evm_uint160be const* _address,
+	evm_address const* _address,
 	evm_uint256be const* _value,
 	uint8_t const* _inputData,
 	size_t _inputSize,
