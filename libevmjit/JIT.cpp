@@ -23,7 +23,7 @@
 
 
 static_assert(sizeof(evm_uint256be) == 32, "evm_uint256be is too big");
-static_assert(sizeof(evm_uint160be) == 20, "evm_uint160be is too big");
+static_assert(sizeof(evm_address) == 20, "evm_address is too big");
 static_assert(sizeof(evm_result) == 64, "evm_result does not fit cache line");
 static_assert(sizeof(evm_message) <= 18*8, "evm_message not optimally packed");
 static_assert(offsetof(evm_message, code_hash) % 8 == 0, "evm_message.code_hash not aligned");
@@ -141,7 +141,7 @@ public:
 
 	ExecFunc compile(evm_revision _rev, bool _staticCall, byte const* _code, uint64_t _codeSize, std::string const& _codeIdentifier);
 
-	evm_host const* host = nullptr;
+	evm_context_fn_table const* host = nullptr;
 
 	evm_message const* currentMsg = nullptr;
 	std::vector<uint8_t> returnBuffer;
@@ -151,7 +151,7 @@ static int64_t call_v2(
 	evm_context* _ctx,
 	evm_call_kind _kind,
 	int64_t _gas,
-	evm_uint160be const* _address,
+	evm_address const* _address,
 	evm_uint256be const* _value,
 	uint8_t const* _inputData,
 	size_t _inputSize,
@@ -193,7 +193,7 @@ static int64_t call_v2(
 	*o_bufData = jit.returnBuffer.data();
 	*o_bufSize = jit.returnBuffer.size();
 
-	if (result.code != EVM_SUCCESS)
+	if (result.status_code != EVM_SUCCESS)
 		r |= EVM_CALL_FAILURE;
 
 	if (result.release)
@@ -337,7 +337,7 @@ bytes_ref ExecutionContext::getReturnData() const
 extern "C"
 {
 
-static evm_instance* create()
+EXPORT evm_instance* evmjit_create()
 {
 	// Let's always return the same instance. It's a bit of faking, but actually
 	// this might be a compliant implementation.
@@ -378,7 +378,7 @@ static evm_result execute(evm_instance* instance, evm_context* context, evm_revi
 	ExecutionContext ctx{rt, context};
 
 	evm_result result;
-	result.code = EVM_SUCCESS;
+	result.status_code = EVM_SUCCESS;
 	result.gas_left = 0;
 	result.output_data = nullptr;
 	result.output_size = 0;
@@ -399,14 +399,14 @@ static evm_result execute(evm_instance* instance, evm_context* context, evm_revi
 
 	if (returnCode == ReturnCode::Revert)
 	{
-		result.code = EVM_REVERT;
+		result.status_code = EVM_REVERT;
 		result.gas_left = rt.gas;
 	}
 	else if (returnCode == ReturnCode::OutOfGas)
 	{
 		// EVMJIT does not provide information what exactly type of failure
 		// it was, so use generic EVM_FAILURE.
-		result.code = EVM_FAILURE;
+		result.status_code = EVM_FAILURE;
 	}
 	else
 	{
@@ -468,15 +468,11 @@ static void prepare_code(evm_instance* instance, evm_revision rev, uint32_t flag
 		jit.mapExecFunc(codeIdentifier, execFunc);
 }
 
-EXPORT evm_factory evmjit_get_factory()
-{
-	return {EVM_ABI_VERSION, create};
-}
-
 }  // extern "C"
 
 JITImpl::JITImpl():
-		evm_instance({evmjit::destroy,
+		evm_instance({EVM_ABI_VERSION,
+		              evmjit::destroy,
 		              evmjit::execute,
 		              evmjit::get_code_status,
 		              evmjit::prepare_code,

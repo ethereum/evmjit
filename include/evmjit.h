@@ -17,10 +17,10 @@
 extern "C" {
 #endif
 
-/// Get EVMJIT instance.
+/// Create EVMJIT instance.
 ///
 /// @return  The EVMJIT instance.
-EXPORT struct evm_factory evmjit_get_factory(void);
+EXPORT struct evm_instance* evmjit_create(void);
 
 #if __cplusplus
 }
