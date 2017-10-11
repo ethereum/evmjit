@@ -207,7 +207,15 @@ class SymbolResolver : public llvm::SectionMemoryManager
 	llvm::RuntimeDyld::SymbolInfo findSymbol(std::string const& _name) override
 	{
 		auto& jit = JITImpl::instance();
-		auto addr = llvm::StringSwitch<uint64_t>(_name)
+
+		// Handle symbols' global prefix.
+		// If in current DataLayout global symbols are prefixed, drop the
+		// prefix from the name for local search.
+		char prefix = jit.engine().getDataLayout().getGlobalPrefix();
+		llvm::StringRef unprefixedName = (prefix != '\0' && _name[0] == prefix)
+			? llvm::StringRef{_name}.drop_front() : llvm::StringRef{_name};
+
+		auto addr = llvm::StringSwitch<uint64_t>(unprefixedName)
 			.Case("env_sha3", reinterpret_cast<uint64_t>(&keccak))
 			.Case("evm.exists", reinterpret_cast<uint64_t>(jit.host->account_exists))
 			.Case("evm.sload", reinterpret_cast<uint64_t>(jit.host->get_storage))
@@ -224,7 +232,7 @@ class SymbolResolver : public llvm::SectionMemoryManager
 			return {addr, llvm::JITSymbolFlags::Exported};
 
 		// Fallback to default implementation that would search for the symbol
-		// in the current process.
+		// in the current process. Use the original prefixed symbol name.
 		// TODO: In the future we should control the whole set of requested
 		//       symbols (like memcpy, memset, etc) to improve performance.
 		return llvm::SectionMemoryManager::findSymbol(_name);
