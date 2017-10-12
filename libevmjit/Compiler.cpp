@@ -21,6 +21,20 @@
 #include "Arith256.h"
 #include "RuntimeManager.h"
 
+#ifndef __has_cpp_attribute
+  #define __has_cpp_attribute(x) 0
+#endif
+
+#if __has_cpp_attribute(fallthrough)
+  #define FALLTHROUGH [[fallthrough]]
+#elif __has_cpp_attribute(clang::fallthrough)
+  #define FALLTHROUGH [[clang::fallthrough]]
+#elif __has_cpp_attribute(gnu::fallthrough)
+  #define FALLTHROUGH [[gnu::fallthrough]]
+#else
+  #define FALLTHROUGH
+#endif
+
 namespace dev
 {
 namespace eth
@@ -80,6 +94,7 @@ std::vector<BasicBlock> Compiler::createBasicBlocks(code_iterator _codeBegin, co
 		case Instruction::STOP:
 		case Instruction::SUICIDE:
 			isDead = true;
+			FALLTHROUGH;
 		case Instruction::JUMPI:
 			isEnd = true;
 			break;
@@ -955,7 +970,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			}
 			_ext.selfdestruct(dest);
 		}
-			// Fallthrough.
+			FALLTHROUGH;
 		case Instruction::STOP:
 			_runtimeManager.exit(ReturnCode::Stop);
 			break;
