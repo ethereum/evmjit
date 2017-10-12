@@ -149,7 +149,7 @@ public:
 
 static int64_t call_v2(
 	evm_context* _ctx,
-	evm_call_kind _kind,
+	int _kind,
 	int64_t _gas,
 	evm_address const* _address,
 	evm_uint256be const* _value,
@@ -164,7 +164,6 @@ static int64_t call_v2(
 	auto& jit = JITImpl::instance();
 
 	evm_message msg;
-	msg.kind = _kind;
 	msg.address = *_address;
 	msg.sender = _kind != EVM_DELEGATECALL ? jit.currentMsg->address : jit.currentMsg->sender;
 	msg.value = _kind != EVM_DELEGATECALL ? *_value : jit.currentMsg->value;
@@ -178,6 +177,8 @@ static int64_t call_v2(
 		msg.kind = EVM_CALL;
 		msg.flags |= EVM_STATIC;
 	}
+	else
+		msg.kind = static_cast<evm_call_kind>(_kind);
 
 	// FIXME: Handle code hash.
 	evm_result result;
