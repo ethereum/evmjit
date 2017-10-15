@@ -216,6 +216,28 @@ int64_t call_v2(
 	return r;
 }
 
+template<unsigned NumBits>
+void div(uint64_t q_words[], uint64_t r_words[], const uint64_t n_words[], const uint64_t d_words[])
+{
+	constexpr unsigned numWords = NumBits / 8 / sizeof(uint64_t);
+	static_assert(numWords * 8 * sizeof(uint64_t) == NumBits, "Invalid NumBits value");
+	assert(llvm::APInt::getNumWords(NumBits) == numWords);
+
+	llvm::APInt n{NumBits, {n_words, numWords}};
+	llvm::APInt d{NumBits, {d_words, numWords}};
+
+	llvm::APInt q{NumBits, 0};
+	llvm::APInt r{NumBits, 0};
+
+	if (d != 0)
+		llvm::APInt::udivrem(n, d, q, r);
+
+	std::copy(q.getRawData(), q.getRawData() + q.getActiveWords(), q_words);
+	std::fill_n(q_words + q.getActiveWords(), numWords - q.getActiveWords(), 0);
+	std::copy(r.getRawData(), r.getRawData() + r.getActiveWords(), r_words);
+	std::fill_n(r_words + r.getActiveWords(), numWords - r.getActiveWords(), 0);
+}
+
 
 class SymbolResolver : public llvm::SectionMemoryManager
 {
@@ -242,6 +264,8 @@ class SymbolResolver : public llvm::SectionMemoryManager
 			.Case("evm.get_tx_context", reinterpret_cast<uint64_t>(jit.host->get_tx_context))
 			.Case("evm.blockhash", reinterpret_cast<uint64_t>(jit.host->get_block_hash))
 			.Case("evm.log", reinterpret_cast<uint64_t>(jit.host->log))
+			.Case("external.evm.udivrem.i256", reinterpret_cast<uint64_t>(div<256>))
+			.Case("external.evm.udivrem.i512", reinterpret_cast<uint64_t>(div<512>))
 			.Default(0);
 		if (addr)
 			return {addr, llvm::JITSymbolFlags::Exported};

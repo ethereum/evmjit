@@ -45,72 +45,35 @@ llvm::Function* createUDivRemFunc(llvm::Type* _type, llvm::Module& _module, char
 	func->setDoesNotThrow();
 	func->setDoesNotAccessMemory();
 
-	auto zero = llvm::ConstantInt::get(_type, 0);
-	auto one = llvm::ConstantInt::get(_type, 1);
-
 	auto iter = func->arg_begin();
 	llvm::Argument* x = &(*iter++);
 	x->setName("x");
 	llvm::Argument* y = &(*iter);
 	y->setName("y");
 
-	auto entryBB = llvm::BasicBlock::Create(_module.getContext(), "Entry", func);
-	auto mainBB = llvm::BasicBlock::Create(_module.getContext(), "Main", func);
-	auto loopBB = llvm::BasicBlock::Create(_module.getContext(), "Loop", func);
-	auto continueBB = llvm::BasicBlock::Create(_module.getContext(), "Continue", func);
-	auto returnBB = llvm::BasicBlock::Create(_module.getContext(), "Return", func);
+	auto bb = llvm::BasicBlock::Create(_module.getContext(), {}, func);
+	auto builder = IRBuilder{bb};
+	auto allocaQ = builder.CreateAlloca(_type, nullptr, "alloca.q");
+	auto allocaR = builder.CreateAlloca(_type, nullptr, "alloca.r");
+	auto allocaN = builder.CreateAlloca(_type, nullptr, "alloca.n");
+	auto allocaD = builder.CreateAlloca(_type, nullptr, "alloca.d");
+	builder.CreateStore(x, allocaN);
+	builder.CreateStore(y, allocaD);
 
-	auto builder = IRBuilder{entryBB};
-	auto yLEx = builder.CreateICmpULE(y, x);
-	auto r0 = x;
-	builder.CreateCondBr(yLEx, mainBB, returnBB);
+	auto ptrTy = _type->getPointerTo();
 
-	builder.SetInsertPoint(mainBB);
-	auto ctlzIntr = llvm::Intrinsic::getDeclaration(&_module, llvm::Intrinsic::ctlz, _type);
-	// both y and r are non-zero
-	auto yLz = builder.CreateCall(ctlzIntr, {y, builder.getInt1(true)}, "y.lz");
-	auto rLz = builder.CreateCall(ctlzIntr, {r0, builder.getInt1(true)}, "r.lz");
-	auto i0 = builder.CreateNUWSub(yLz, rLz, "i0");
-	auto y0 = builder.CreateShl(y, i0);
-	builder.CreateBr(loopBB);
+	auto extFunc = llvm::Function::Create(
+		llvm::FunctionType::get(builder.getVoidTy(), {ptrTy, ptrTy, ptrTy, ptrTy}, false),
+		llvm::Function::ExternalLinkage,
+		{"external.", llvm::StringRef{_funcName}},
+		&_module
+	);
 
-	builder.SetInsertPoint(loopBB);
-	auto yPhi = builder.CreatePHI(_type, 2, "y.phi");
-	auto rPhi = builder.CreatePHI(_type, 2, "r.phi");
-	auto iPhi = builder.CreatePHI(_type, 2, "i.phi");
-	auto qPhi = builder.CreatePHI(_type, 2, "q.phi");
-	auto rUpdate = builder.CreateNUWSub(rPhi, yPhi);
-	auto qUpdate = builder.CreateOr(qPhi, one);	// q += 1, q lowest bit is 0
-	auto rGEy = builder.CreateICmpUGE(rPhi, yPhi);
-	auto r1 = builder.CreateSelect(rGEy, rUpdate, rPhi, "r1");
-	auto q1 = builder.CreateSelect(rGEy, qUpdate, qPhi, "q");
-	auto iZero = builder.CreateICmpEQ(iPhi, zero);
-	builder.CreateCondBr(iZero, returnBB, continueBB);
-
-	builder.SetInsertPoint(continueBB);
-	auto i2 = builder.CreateNUWSub(iPhi, one);
-	auto q2 = builder.CreateShl(q1, one);
-	auto y2 = builder.CreateLShr(yPhi, one);
-	builder.CreateBr(loopBB);
-
-	yPhi->addIncoming(y0, mainBB);
-	yPhi->addIncoming(y2, continueBB);
-	rPhi->addIncoming(r0, mainBB);
-	rPhi->addIncoming(r1, continueBB);
-	iPhi->addIncoming(i0, mainBB);
-	iPhi->addIncoming(i2, continueBB);
-	qPhi->addIncoming(zero, mainBB);
-	qPhi->addIncoming(q2, continueBB);
-
-	builder.SetInsertPoint(returnBB);
-	auto qRet = builder.CreatePHI(_type, 2, "q.ret");
-	qRet->addIncoming(zero, entryBB);
-	qRet->addIncoming(q1, loopBB);
-	auto rRet = builder.CreatePHI(_type, 2, "r.ret");
-	rRet->addIncoming(r0, entryBB);
-	rRet->addIncoming(r1, loopBB);
-	auto ret = builder.CreateInsertElement(llvm::UndefValue::get(retType), qRet, uint64_t(0), "ret0");
-	ret = builder.CreateInsertElement(ret, rRet, 1, "ret");
+	builder.CreateCall(extFunc, {allocaQ, allocaR, allocaN, allocaD});
+	auto q = builder.CreateLoad(allocaQ);
+	auto r = builder.CreateLoad(allocaR);
+	auto ret = builder.CreateInsertElement(llvm::UndefValue::get(retType), q, uint64_t(0), "ret0");
+	ret = builder.CreateInsertElement(ret, r, 1, "ret");
 	builder.CreateRet(ret);
 
 	return func;
