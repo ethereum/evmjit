@@ -21,6 +21,8 @@
 #include "Utils.h"
 #include "BuildInfo.gen.h"
 
+#include <deps/include/mpir.h>
+
 
 static_assert(sizeof(evm_uint256be) == 32, "evm_uint256be is too big");
 static_assert(sizeof(evm_address) == 20, "evm_address is too big");
@@ -147,7 +149,7 @@ public:
 	std::vector<uint8_t> returnBuffer;
 };
 
-static int64_t call_v2(
+int64_t call_v2(
 	evm_context* _ctx,
 	int _kind,
 	int64_t _gas,
@@ -202,6 +204,29 @@ static int64_t call_v2(
 	return r;
 }
 
+template<size_t N>
+void div(uint64_t q[], uint64_t r[], const uint64_t n[], const uint64_t d[])
+{
+	// We don't have to zero everything, but only top limbs that MPIR will
+	// not touch. But simple constant-length memset might be actually faster.
+	std::fill_n(q, N, 0);
+	std::fill_n(r, N, 0);
+
+	size_t d_size = N;
+	for (size_t i = 0; i < N; ++i)
+	{
+		if (d[N - 1 - i] != 0)
+			break;
+		--d_size;
+	}
+	assert(d_size > 0);
+
+	mpn_tdiv_qr(q, r, 0, n, N, d, d_size);
+
+//	size_t q_size = N - d_size + 1;
+//	gmp_printf("DIV %Nx / %Nx = %Nx, %Nx\n", n, N, d, d_size, q, q_size, r, d_size);
+}
+
 
 class SymbolResolver : public llvm::SectionMemoryManager
 {
@@ -228,6 +253,8 @@ class SymbolResolver : public llvm::SectionMemoryManager
 			.Case("evm.get_tx_context", reinterpret_cast<uint64_t>(jit.host->get_tx_context))
 			.Case("evm.blockhash", reinterpret_cast<uint64_t>(jit.host->get_block_hash))
 			.Case("evm.log", reinterpret_cast<uint64_t>(jit.host->log))
+			.Case("external.evm.udivrem.i256", reinterpret_cast<uint64_t>(div<4>))
+			.Case("external.evm.udivrem.i512", reinterpret_cast<uint64_t>(div<8>))
 			.Default(0);
 		if (addr)
 			return {addr, llvm::JITSymbolFlags::Exported};
