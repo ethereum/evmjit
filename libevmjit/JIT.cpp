@@ -189,10 +189,17 @@ static int64_t call_v2(
 	// Handle output. It can contain data from RETURN or REVERT opcodes.
 	auto size = std::min(_outputSize, result.output_size);
 	std::copy(result.output_data, result.output_data + size, _outputData);
-	jit.returnBuffer = {result.output_data, result.output_data + result.output_size};
 
-	*o_bufData = jit.returnBuffer.data();
-	*o_bufSize = jit.returnBuffer.size();
+	// Update RETURNDATA buffer.
+	// The buffer is already cleared.
+	// In case of successful CREATE the output contains the address of the
+	// created contract, but we don't want to copy the address to the buffer.
+	if (!(_kind == EVM_CREATE && result.status_code == EVM_SUCCESS))
+	{
+		jit.returnBuffer = {result.output_data, result.output_data + result.output_size};
+		*o_bufData = jit.returnBuffer.data();
+		*o_bufSize = jit.returnBuffer.size();
+	}
 
 	if (result.status_code != EVM_SUCCESS)
 		r |= EVM_CALL_FAILURE;

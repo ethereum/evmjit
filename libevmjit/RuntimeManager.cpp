@@ -164,9 +164,8 @@ RuntimeManager::RuntimeManager(IRBuilder& _builder, code_iterator _codeBegin, co
 	m_builder.CreateStore(m_dataElts[RuntimeData::Index::Gas], m_gasPtr);
 
 	m_returnBufDataPtr = m_builder.CreateAlloca(Type::BytePtr, nullptr, "returndata.ptr");
-	m_builder.CreateStore(llvm::ConstantPointerNull::get(Type::BytePtr), m_returnBufDataPtr);
 	m_returnBufSizePtr = m_builder.CreateAlloca(Type::Size, nullptr, "returndatasize.ptr");
-	m_builder.CreateStore(m_builder.getInt64(0), m_returnBufSizePtr);
+	resetReturnBuf();
 
 	m_exitBB = llvm::BasicBlock::Create(m_builder.getContext(), "Exit", getMainFunction());
 	InsertPointGuard guard{m_builder};
@@ -267,6 +266,11 @@ void RuntimeManager::abort(llvm::Value* _jmpBuf)
 {
 	auto longjmp = llvm::Intrinsic::getDeclaration(getModule(), llvm::Intrinsic::eh_sjlj_longjmp);
 	m_builder.CreateCall(longjmp, {_jmpBuf});
+}
+
+void RuntimeManager::resetReturnBuf()
+{
+	m_builder.CreateStore(m_builder.getInt64(0), m_returnBufSizePtr);
 }
 
 llvm::Value* RuntimeManager::getCallData()
