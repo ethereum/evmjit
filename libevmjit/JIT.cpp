@@ -109,9 +109,12 @@ void parseOptions()
 	cl::ParseEnvironmentOptions("evmjit", "EVMJIT", "Ethereum EVM JIT Compiler");
 }
 
+class SymbolResolver;
+
 class JITImpl: public evm_instance
 {
 	std::unique_ptr<llvm::ExecutionEngine> m_engine;
+	SymbolResolver const* m_memoryMgr = nullptr;
 	mutable std::mutex x_codeMap;
 	std::unordered_map<std::string, ExecFunc> m_codeMap;
 
@@ -123,6 +126,8 @@ class JITImpl: public evm_instance
 		return llvmContext;
 	}
 
+	void createEngine();
+
 public:
 	static JITImpl& instance()
 	{
@@ -133,6 +138,8 @@ public:
 	}
 
 	JITImpl();
+
+	void checkMemorySize();
 
 	llvm::ExecutionEngine& engine() { return *m_engine; }
 
@@ -147,7 +154,7 @@ public:
 	std::vector<uint8_t> returnBuffer;
 };
 
-static int64_t call_v2(
+int64_t call_v2(
 	evm_context* _ctx,
 	int _kind,
 	int64_t _gas,
@@ -189,10 +196,17 @@ static int64_t call_v2(
 	// Handle output. It can contain data from RETURN or REVERT opcodes.
 	auto size = std::min(_outputSize, result.output_size);
 	std::copy(result.output_data, result.output_data + size, _outputData);
-	jit.returnBuffer = {result.output_data, result.output_data + result.output_size};
 
-	*o_bufData = jit.returnBuffer.data();
-	*o_bufSize = jit.returnBuffer.size();
+	// Update RETURNDATA buffer.
+	// The buffer is already cleared.
+	// In case of successful CREATE the output contains the address of the
+	// created contract, but we don't want to copy the address to the buffer.
+	if (!(_kind == EVM_CREATE && result.status_code == EVM_SUCCESS))
+	{
+		jit.returnBuffer = {result.output_data, result.output_data + result.output_size};
+		*o_bufData = jit.returnBuffer.data();
+		*o_bufSize = jit.returnBuffer.size();
+	}
 
 	if (result.status_code != EVM_SUCCESS)
 		r |= EVM_CALL_FAILURE;
@@ -241,16 +255,17 @@ class SymbolResolver : public llvm::SectionMemoryManager
 
 	void reportMemorySize(size_t _addedSize)
 	{
+		m_totalMemorySize += _addedSize;
+
 		if (!g_stats)
 			return;
 
-		m_totalMemorySize += _addedSize;
 		if (m_totalMemorySize >= m_printMemoryLimit)
 		{
-			static const auto M = 1024 * 1024;
-			auto value = double(m_totalMemorySize) / M;
-			std::cerr << "EVMJIT total memory size: " << value << '\n';
-			m_printMemoryLimit += M;
+			constexpr size_t printMemoryStep = 10 * 1024 * 1024;
+			auto value = double(m_totalMemorySize) / printMemoryStep;
+			std::cerr << "EVMJIT total memory size: " << (10 * value) << " MB\n";
+			m_printMemoryLimit += printMemoryStep;
 		}
 	}
 
@@ -270,6 +285,9 @@ class SymbolResolver : public llvm::SectionMemoryManager
 
 	size_t m_totalMemorySize = 0;
 	size_t m_printMemoryLimit = 1024 * 1024;
+
+public:
+	size_t totalMemorySize() const { return m_totalMemorySize; }
 };
 
 
@@ -363,6 +381,10 @@ static evm_result execute(evm_instance* instance, evm_context* context, evm_revi
 	evm_message const* msg, uint8_t const* code, size_t code_size)
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
+
+	if (msg->depth == 0)
+		jit.checkMemorySize();
+
 	if (!jit.host)
 		jit.host = context->fn_table;
 	assert(jit.host == context->fn_table);  // Require the fn_table not to change.
@@ -479,6 +501,36 @@ static void prepare_code(evm_instance* instance, evm_revision rev, uint32_t flag
 
 }  // extern "C"
 
+void JITImpl::createEngine()
+{
+	auto module = llvm::make_unique<llvm::Module>("", getLLVMContext());
+
+	// FIXME: LLVM 3.7: test on Windows
+	auto triple = llvm::Triple(llvm::sys::getProcessTriple());
+	if (triple.getOS() == llvm::Triple::OSType::Win32)
+		triple.setObjectFormat(llvm::Triple::ObjectFormatType::ELF);  // MCJIT does not support COFF format
+	module->setTargetTriple(triple.str());
+
+	llvm::EngineBuilder builder(std::move(module));
+	builder.setEngineKind(llvm::EngineKind::JIT);
+	auto memoryMgr = llvm::make_unique<SymbolResolver>();
+	m_memoryMgr = memoryMgr.get();
+	builder.setMCJITMemoryManager(std::move(memoryMgr));
+	builder.setOptLevel(g_optimize ? llvm::CodeGenOpt::Default : llvm::CodeGenOpt::None);
+#ifndef NDEBUG
+	builder.setVerifyModules(true);
+#endif
+
+	m_engine.reset(builder.create());
+
+	// TODO: Update cache listener
+	m_engine->setObjectCache(Cache::init(g_cache, nullptr));
+
+	// FIXME: Disabled during API changes
+	//if (preloadCache)
+	//	Cache::preload(*m_engine, funcCache);
+}
+
 JITImpl::JITImpl():
 		evm_instance({EVM_ABI_VERSION,
 		              evmjit::destroy,
@@ -496,30 +548,23 @@ JITImpl::JITImpl():
 	llvm::InitializeNativeTarget();
 	llvm::InitializeNativeTargetAsmPrinter();
 
-	auto module = llvm::make_unique<llvm::Module>("", getLLVMContext());
+	createEngine();
+}
 
-	// FIXME: LLVM 3.7: test on Windows
-	auto triple = llvm::Triple(llvm::sys::getProcessTriple());
-	if (triple.getOS() == llvm::Triple::OSType::Win32)
-		triple.setObjectFormat(llvm::Triple::ObjectFormatType::ELF);  // MCJIT does not support COFF format
-	module->setTargetTriple(triple.str());
+void JITImpl::checkMemorySize()
+{
+	constexpr size_t memoryLimit = 1000 * 1024 * 1024;
 
-	llvm::EngineBuilder builder(std::move(module));
-	builder.setEngineKind(llvm::EngineKind::JIT);
-	builder.setMCJITMemoryManager(llvm::make_unique<SymbolResolver>());
-	builder.setOptLevel(g_optimize ? llvm::CodeGenOpt::Default : llvm::CodeGenOpt::None);
-#ifndef NDEBUG
-	builder.setVerifyModules(true);
-#endif
+	if (m_memoryMgr->totalMemorySize() > memoryLimit)
+	{
+		if (g_stats)
+			std::cerr << "EVMJIT reset!\n";
 
-	m_engine.reset(builder.create());
-
-	// TODO: Update cache listener
-	m_engine->setObjectCache(Cache::init(g_cache, nullptr));
-
-	// FIXME: Disabled during API changes
-	//if (preloadCache)
-	//	Cache::preload(*m_engine, funcCache);
+		std::lock_guard<std::mutex> lock{x_codeMap};
+		m_codeMap.clear();
+		m_engine.reset();
+		createEngine();
+	}
 }
 
 }

@@ -50,6 +50,10 @@ public:
 	llvm::Value* getReturnBufDataPtr() const { return m_returnBufDataPtr; }
 	llvm::Value* getReturnBufSizePtr() const { return m_returnBufSizePtr; }
 
+	/// Reset RETURNDATA buffer (before calls).
+	/// This effectively only sets the buffer size to 0.
+	void resetReturnBuf();
+
 	void setJmpBuf(llvm::Value* _jmpBuf) { m_jmpBuf = _jmpBuf; }
 	void setExitBB(llvm::BasicBlock* _bb) { m_exitBB = _bb; }
 

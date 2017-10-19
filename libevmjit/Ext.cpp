@@ -545,6 +545,7 @@ llvm::Value* Ext::call(int _kind,
 
 	auto func = getCallFunc(getModule());
 	auto myAddr = Endianness::toBE(m_builder, m_builder.CreateTrunc(Endianness::toNative(m_builder, getRuntimeManager().getAddress()), addrTy));
+	getRuntimeManager().resetReturnBuf();
 	return createCABICall(
 		func,
 		{getRuntimeManager().getEnvPtr(), m_builder.getInt32(_kind), gas,
@@ -569,6 +570,7 @@ std::tuple<llvm::Value*, llvm::Value*> Ext::create(llvm::Value* _gas,
 
 	auto func = getCallFunc(getModule());
 	auto myAddr = Endianness::toBE(m_builder, m_builder.CreateTrunc(Endianness::toNative(m_builder, getRuntimeManager().getAddress()), addrTy));
+	getRuntimeManager().resetReturnBuf();
 	auto ret = createCABICall(
 		func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_CREATE),
 			   _gas, llvm::UndefValue::get(addrTy), value, inData, inSize, pAddr,
