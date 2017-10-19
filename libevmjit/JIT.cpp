@@ -217,25 +217,21 @@ int64_t call_v2(
 }
 
 template<unsigned NumBits>
-void div(uint64_t q_words[], uint64_t r_words[], const uint64_t n_words[], const uint64_t d_words[])
+void div(uint64_t quotient[], uint64_t reminder[], const uint64_t numerator[], const uint64_t divisor[])
 {
 	constexpr unsigned numWords = NumBits / 8 / sizeof(uint64_t);
 	static_assert(numWords * 8 * sizeof(uint64_t) == NumBits, "Invalid NumBits value");
-	assert(llvm::APInt::getNumWords(NumBits) == numWords);
 
-	llvm::APInt n{NumBits, {n_words, numWords}};
-	llvm::APInt d{NumBits, {d_words, numWords}};
+	std::array<uint64_t, numWords> scratch;  // NOLINT: Allowed to be uninitialized.
+	std::copy_n(numerator, numWords, quotient);
 
-	llvm::APInt q{NumBits, 0};
-	llvm::APInt r{NumBits, 0};
+	int status = llvm::APInt::tcDivide(quotient, divisor, reminder, scratch.data(), numWords);
 
-	if (d != 0)
-		llvm::APInt::udivrem(n, d, q, r);
-
-	std::copy(q.getRawData(), q.getRawData() + q.getActiveWords(), q_words);
-	std::fill_n(q_words + q.getActiveWords(), numWords - q.getActiveWords(), 0);
-	std::copy(r.getRawData(), r.getRawData() + r.getActiveWords(), r_words);
-	std::fill_n(r_words + r.getActiveWords(), numWords - r.getActiveWords(), 0);
+	if (status == 1)  // Division by 0.
+	{
+		std::fill_n(quotient, numWords, 0);
+		std::fill_n(reminder, numWords, 0);
+	}
 }
 
 
