@@ -33,6 +33,9 @@ static_assert(offsetof(evm_message, code_hash) % 8 == 0, "evm_message.code_hash 
 static_assert(sizeof(evm_call_kind)  == sizeof(int), "Enum `evm_call_kind` is not the size of int");
 static_assert(sizeof(evm_revision)       == sizeof(int), "Enum `evm_revision` is not the size of int");
 
+constexpr size_t optionalDataSize = sizeof(evm_result) - offsetof(evm_result, create_address);
+static_assert(optionalDataSize == sizeof(evm_result_optional_data), "");
+
 
 namespace dev
 {
@@ -195,18 +198,16 @@ int64_t call_v2(
 
 	// Handle output. It can contain data from RETURN or REVERT opcodes.
 	auto size = std::min(_outputSize, result.output_size);
-	std::copy(result.output_data, result.output_data + size, _outputData);
+	std::copy_n(result.output_data, size, _outputData);
 
 	// Update RETURNDATA buffer.
 	// The buffer is already cleared.
-	// In case of successful CREATE the output contains the address of the
-	// created contract, but we don't want to copy the address to the buffer.
-	if (!(_kind == EVM_CREATE && result.status_code == EVM_SUCCESS))
-	{
-		jit.returnBuffer = {result.output_data, result.output_data + result.output_size};
-		*o_bufData = jit.returnBuffer.data();
-		*o_bufSize = jit.returnBuffer.size();
-	}
+	jit.returnBuffer = {result.output_data, result.output_data + result.output_size};
+	*o_bufData = jit.returnBuffer.data();
+	*o_bufSize = jit.returnBuffer.size();
+
+	if (_kind == EVM_CREATE && result.status_code == EVM_SUCCESS)
+		std::copy_n(result.create_address.bytes, sizeof(result.create_address), _outputData);
 
 	if (result.status_code != EVM_SUCCESS)
 		r |= EVM_CALL_FAILURE;
@@ -360,7 +361,6 @@ bytes_ref ExecutionContext::getReturnData() const
 	return bytes_ref{data, size};
 }
 
-
 extern "C"
 {
 
@@ -456,12 +456,13 @@ static evm_result execute(evm_instance* instance, evm_context* context, evm_revi
 	if (ctx.m_memData)
 	{
 		// Use result's reserved data to store the memory pointer.
-		result.reserved.context = ctx.m_memData;
+
+		evm_get_optional_data(&result)->pointer = ctx.m_memData;
 
 		// Set pointer to the destructor that will release the memory.
-		result.release = [](evm_result const* result)
+		result.release = [](evm_result const* r)
 		{
-			std::free(result->reserved.context);
+			std::free(evm_get_const_optional_data(r)->pointer);
 		};
 		ctx.m_memData = nullptr;
 	}
