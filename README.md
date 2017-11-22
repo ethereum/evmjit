@@ -7,12 +7,13 @@ It can be used to substitute classic interpreter-like EVM Virtual Machine in Eth
 
 ## Build
 
-The EVMJIT project uses **CMake** tool to configure the build and depends only on LLVM library.
+The EVMJIT project uses **CMake** tool to configure the build and depends only on the LLVM library.
 LLVM installation is not needed, because CMake will download and build LLVM from source.
 However, LLVM requires **Python** interpreter to be built.
 
 ```sh
-mkdir build; cd build
+mkdir build
+cd build
 cmake ..
 cmake --build . --config RelWithDebInfo
 ```
