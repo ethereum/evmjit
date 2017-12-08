@@ -255,7 +255,9 @@ void Memory::copyBytesNoPadding(llvm::Value* _srcPtr, llvm::Value* _srcSize, llv
 	auto copyWords = m_builder.CreateUDiv(m_builder.CreateNUWAdd(reqBytes, m_builder.getInt64(31)), m_builder.getInt64(32));
 
 	auto reqSize = m_builder.CreateAdd(_srcIdx, _reqBytes);
-	auto bufferOverrun = m_builder.CreateICmpUGT(reqSize, m_builder.CreateZExt(_srcSize, Type::Word));
+	auto overflow = m_builder.CreateICmpULT(reqSize, _reqBytes);
+	auto outOfRange = m_builder.CreateICmpUGT(reqSize, m_builder.CreateZExt(_srcSize, Type::Word));
+	auto bufferOverrun = m_builder.CreateOr(overflow, outOfRange);
 	auto penalty = m_builder.getInt64(std::numeric_limits<int64_t>::max());
 	auto cost = m_builder.CreateSelect(bufferOverrun, penalty, copyWords);
 	m_gasMeter.countCopy(cost);
