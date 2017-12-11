@@ -150,7 +150,7 @@ RuntimeManager::RuntimeManager(IRBuilder& _builder, code_iterator _codeBegin, co
 
 	auto mallocFunc = llvm::Function::Create(llvm::FunctionType::get(Type::WordPtr, {Type::Size}, false), llvm::Function::ExternalLinkage, "malloc", getModule());
 	mallocFunc->setDoesNotThrow();
-	mallocFunc->setDoesNotAlias(0);
+	mallocFunc->addAttribute(0, llvm::Attribute::NoAlias);
 
 	m_stackBase = m_builder.CreateCall(mallocFunc, m_builder.getInt64(Type::Word->getPrimitiveSizeInBits() / 8 * stackSizeLimit), "stack.base"); // TODO: Use Type::SizeT type
 	m_stackSize = m_builder.CreateAlloca(Type::Size, nullptr, "stack.size");
@@ -176,7 +176,7 @@ RuntimeManager::RuntimeManager(IRBuilder& _builder, code_iterator _codeBegin, co
 	{
 		freeFunc = llvm::Function::Create(llvm::FunctionType::get(Type::Void, Type::WordPtr, false), llvm::Function::ExternalLinkage, "free", getModule());
 		freeFunc->setDoesNotThrow();
-		freeFunc->setDoesNotCapture(1);
+		freeFunc->addAttribute(1, llvm::Attribute::NoCapture);
 	}
 	m_builder.CreateCall(freeFunc, {m_stackBase});
 	auto extGasPtr = m_builder.CreateStructGEP(getRuntimeDataType(), getDataPtr(), RuntimeData::Index::Gas, "msg.gas.ptr");

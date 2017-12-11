@@ -23,7 +23,7 @@ GasMeter::GasMeter(IRBuilder& _builder, RuntimeManager& _runtimeManager, evm_rev
 	llvm::Type* gasCheckArgs[] = {Type::Gas->getPointerTo(), Type::Gas, Type::BytePtr};
 	m_gasCheckFunc = llvm::Function::Create(llvm::FunctionType::get(Type::Void, gasCheckArgs, false), llvm::Function::PrivateLinkage, "gas.check", getModule());
 	m_gasCheckFunc->setDoesNotThrow();
-	m_gasCheckFunc->setDoesNotCapture(1);
+	m_gasCheckFunc->addAttribute(1, llvm::Attribute::NoCapture);
 
 	auto checkBB = llvm::BasicBlock::Create(_builder.getContext(), "Check", m_gasCheckFunc);
 	auto updateBB = llvm::BasicBlock::Create(_builder.getContext(), "Update", m_gasCheckFunc);

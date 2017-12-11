@@ -152,9 +152,9 @@ llvm::Function* LocalStack::getStackPrepareFunc()
 	llvm::Type* argsTys[] = {Type::WordPtr, Type::Size->getPointerTo(), Type::Size, Type::Size, Type::Size, Type::BytePtr};
 	auto func = llvm::Function::Create(llvm::FunctionType::get(Type::WordPtr, argsTys, false), llvm::Function::PrivateLinkage, c_funcName, getModule());
 	func->setDoesNotThrow();
-	func->setDoesNotAccessMemory(1);
-	func->setDoesNotAlias(2);
-	func->setDoesNotCapture(2);
+	func->addAttribute(1, llvm::Attribute::ReadNone);
+	func->addAttribute(2, llvm::Attribute::NoAlias);
+	func->addAttribute(2, llvm::Attribute::NoCapture);
 
 	auto checkBB = llvm::BasicBlock::Create(func->getContext(), "Check", func);
 	auto updateBB = llvm::BasicBlock::Create(func->getContext(), "Update", func);
