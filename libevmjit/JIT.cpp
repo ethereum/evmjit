@@ -69,8 +69,8 @@ std::string makeCodeId(evm_uint256be codeHash, evm_revision rev, uint32_t flags)
 	str.reserve(sizeof(codeHash) * 2 + 1);
 	for (auto b: codeHash.bytes)
 	{
-		str.push_back(hexChars[b & 0xf]);
 		str.push_back(hexChars[b >> 4]);
+		str.push_back(hexChars[b & 0xf]);
 	}
 	str.push_back(toChar(rev));
 	if (flags & EVM_STATIC)
@@ -171,6 +171,7 @@ int64_t call_v2(
 	size_t* o_bufSize
 ) noexcept
 {
+	// FIXME: Handle unexpected exceptions.
 	auto& jit = JITImpl::instance();
 
 	evm_message msg;
