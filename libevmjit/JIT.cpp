@@ -100,8 +100,7 @@ cl::opt<CacheMode> g_cache{"cache", cl::desc{"Cache compiled EVM code on disk"},
 		clEnumValN(CacheMode::read,  "r", "Read only. No new objects are added to cache."),
 		clEnumValN(CacheMode::write, "w", "Write only. No objects are loaded from cache."),
 		clEnumValN(CacheMode::clear, "c", "Clear the cache storage. Cache is disabled."),
-		clEnumValN(CacheMode::preload, "p", "Preload all cached objects."),
-		clEnumValEnd)};
+		clEnumValN(CacheMode::preload, "p", "Preload all cached objects."))};
 cl::opt<bool> g_stats{"st", cl::desc{"Statistics"}};
 cl::opt<bool> g_dump{"dump", cl::desc{"Dump LLVM IR module"}};
 
@@ -221,7 +220,7 @@ int64_t call_v2(
 
 class SymbolResolver : public llvm::SectionMemoryManager
 {
-	llvm::RuntimeDyld::SymbolInfo findSymbol(std::string const& _name) override
+	llvm::JITSymbol findSymbol(std::string const& _name) override
 	{
 		auto& jit = JITImpl::instance();
 
