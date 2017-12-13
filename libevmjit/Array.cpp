@@ -30,7 +30,7 @@ llvm::Function* Array::createArrayPushFunc()
 	llvm::Type* argTypes[] = {m_array->getType(), Type::Word};
 	auto func = llvm::Function::Create(llvm::FunctionType::get(Type::Void, argTypes, false), llvm::Function::PrivateLinkage, "array.push", getModule());
 	func->setDoesNotThrow();
-	func->setDoesNotCapture(1);
+	func->addAttribute(1, llvm::Attribute::NoCapture);
 
 	auto iter = func->arg_begin();
 	llvm::Argument* arrayPtr = &(*iter++);
@@ -81,7 +81,7 @@ llvm::Function* Array::createArraySetFunc()
 	llvm::Type* argTypes[] = {m_array->getType(), Type::Size, Type::Word};
 	auto func = llvm::Function::Create(llvm::FunctionType::get(Type::Void, argTypes, false), llvm::Function::PrivateLinkage, "array.set", getModule());
 	func->setDoesNotThrow();
-	func->setDoesNotCapture(1);
+	func->addAttribute(1, llvm::Attribute::NoCapture);
 
 	auto iter = func->arg_begin();
 	llvm::Argument* arrayPtr = &(*iter++);
@@ -106,7 +106,7 @@ llvm::Function* Array::createArrayGetFunc()
 	llvm::Type* argTypes[] = {m_array->getType(), Type::Size};
 	auto func = llvm::Function::Create(llvm::FunctionType::get(Type::Word, argTypes, false), llvm::Function::PrivateLinkage, "array.get", getModule());
 	func->setDoesNotThrow();
-	func->setDoesNotCapture(1);
+	func->addAttribute(1, llvm::Attribute::NoCapture);
 
 	auto iter = func->arg_begin();
 	llvm::Argument* arrayPtr = &(*iter++);
@@ -129,7 +129,7 @@ llvm::Function* Array::createGetPtrFunc()
 	llvm::Type* argTypes[] = {m_array->getType(), Type::Size};
 	auto func = llvm::Function::Create(llvm::FunctionType::get(Type::WordPtr, argTypes, false), llvm::Function::PrivateLinkage, "array.getPtr", getModule());
 	func->setDoesNotThrow();
-	func->setDoesNotCapture(1);
+	func->addAttribute(1, llvm::Attribute::NoCapture);
 
 	auto iter = func->arg_begin();
 	llvm::Argument* arrayPtr = &(*iter++);
@@ -151,11 +151,11 @@ llvm::Function* Array::createFreeFunc()
 {
 	auto func = llvm::Function::Create(llvm::FunctionType::get(Type::Void, m_array->getType(), false), llvm::Function::PrivateLinkage, "array.free", getModule());
 	func->setDoesNotThrow();
-	func->setDoesNotCapture(1);
+	func->addAttribute(1, llvm::Attribute::NoCapture);
 
 	auto freeFunc = llvm::Function::Create(llvm::FunctionType::get(Type::Void, Type::BytePtr, false), llvm::Function::ExternalLinkage, "free", getModule());
 	freeFunc->setDoesNotThrow();
-	freeFunc->setDoesNotCapture(1);
+	freeFunc->addAttribute(1, llvm::Attribute::NoCapture);
 
 	auto arrayPtr = &func->getArgumentList().front();
 	arrayPtr->setName("arrayPtr");
@@ -178,8 +178,8 @@ llvm::Function* Array::getReallocFunc()
 	llvm::Type* reallocArgTypes[] = {Type::BytePtr, Type::Size};
 	auto reallocFunc = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, reallocArgTypes, false), llvm::Function::ExternalLinkage, "realloc", getModule());
 	reallocFunc->setDoesNotThrow();
-	reallocFunc->setDoesNotAlias(0);
-	reallocFunc->setDoesNotCapture(1);
+	reallocFunc->addAttribute(0, llvm::Attribute::NoAlias);
+	reallocFunc->addAttribute(1, llvm::Attribute::NoCapture);
 	return reallocFunc;
 }
 
@@ -188,7 +188,7 @@ llvm::Function* Array::createExtendFunc()
 	llvm::Type* argTypes[] = {m_array->getType(), Type::Size};
 	auto func = llvm::Function::Create(llvm::FunctionType::get(Type::Void, argTypes, false), llvm::Function::PrivateLinkage, "array.extend", getModule());
 	func->setDoesNotThrow();
-	func->setDoesNotCapture(1);
+	func->addAttribute(1, llvm::Attribute::NoCapture);
 
 	auto iter = func->arg_begin();
 	llvm::Argument* arrayPtr = &(*iter++);
