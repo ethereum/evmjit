@@ -10,6 +10,7 @@
 #include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #include <llvm/Support/TargetSelect.h>
+#include <llvm/Support/raw_os_ostream.h>
 #include <evm.h>
 #include "preprocessor/llvm_includes_end.h"
 
@@ -329,8 +330,13 @@ ExecFunc JITImpl::compile(evm_revision _rev, bool _staticCall, byte const* _code
 
 		prepare(*module);
 	}
+
 	if (g_dump)
-		module->dump();
+	{
+		llvm::raw_os_ostream cerr{std::cerr};
+		module->print(cerr, nullptr);
+	}
+
 
 	m_engine->addModule(std::move(module));
 	//listener->stateChanged(ExecState::CodeGen);
