@@ -35,14 +35,12 @@ function(configure_llvm_project)
         # Only used here locally to setup the "llvm" imported target
         set(LIBS
             LLVMMCJIT
-            LLVMX86CodeGen LLVMX86Desc LLVMX86Info LLVMMCDisassembler
-            LLVMX86AsmPrinter LLVMX86Utils LLVMSelectionDAG LLVMAsmPrinter
-            LLVMDebugInfoCodeView LLVMCodeGen LLVMBitWriter LLVMipo
-            LLVMInstrumentation LLVMVectorize LLVMScalarOpts LLVMLinker
-            LLVMIRReader LLVMAsmParser LLVMInstCombine LLVMTransformUtils
-            LLVMExecutionEngine LLVMTarget LLVMAnalysis LLVMProfileData
-            LLVMRuntimeDyld LLVMObject LLVMMCParser LLVMBitReader LLVMMC
-            LLVMCore LLVMSupport
+            LLVMX86CodeGen LLVMGlobalISel LLVMX86Desc LLVMX86Info LLVMMCDisassembler
+            LLVMX86AsmPrinter LLVMX86Utils LLVMSelectionDAG LLVMAsmPrinter LLVMDebugInfoCodeView
+            LLVMDebugInfoMSF LLVMCodeGen LLVMipo LLVMInstrumentation LLVMVectorize LLVMScalarOpts
+            LLVMLinker LLVMIRReader LLVMAsmParser LLVMInstCombine LLVMTransformUtils LLVMBitWriter
+            LLVMExecutionEngine LLVMTarget LLVMAnalysis LLVMProfileData LLVMRuntimeDyld LLVMObject
+            LLVMMCParser LLVMBitReader LLVMMC LLVMCore LLVMBinaryFormat LLVMSupport LLVMDemangle
         )
 
         # System libs that LLVM depend on.
@@ -71,7 +69,7 @@ function(configure_llvm_project)
                        -DLLVM_ENABLE_TERMINFO=OFF  # Disable terminal color support
                        -DLLVM_ENABLE_ZLIB=OFF      # Disable compression support -- not needed at all
                        -DLLVM_TARGETS_TO_BUILD=X86
-                       -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF
+                       -DLLVM_INCLUDE_TOOLS=ON -DLLVM_INCLUDE_EXAMPLES=OFF
                        -DLLVM_INCLUDE_TESTS=OFF
             LOG_CONFIGURE TRUE
             BUILD_COMMAND   ${BUILD_COMMAND}
