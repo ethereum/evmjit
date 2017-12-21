@@ -69,7 +69,8 @@ function(configure_llvm_project)
                        -DLLVM_ENABLE_TERMINFO=OFF  # Disable terminal color support
                        -DLLVM_ENABLE_ZLIB=OFF      # Disable compression support -- not needed at all
                        -DLLVM_TARGETS_TO_BUILD=X86
-                       -DLLVM_INCLUDE_TOOLS=ON -DLLVM_INCLUDE_EXAMPLES=OFF
+                       -DLLVM_INCLUDE_TOOLS=OFF
+                       -DLLVM_INCLUDE_EXAMPLES=OFF
                        -DLLVM_INCLUDE_TESTS=OFF
             LOG_CONFIGURE TRUE
             BUILD_COMMAND   ${BUILD_COMMAND}
