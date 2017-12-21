@@ -10,6 +10,7 @@
 #include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #include <llvm/Support/TargetSelect.h>
+#include <llvm/Support/raw_os_ostream.h>
 #include <evm.h>
 #include "preprocessor/llvm_includes_end.h"
 
@@ -100,8 +101,7 @@ cl::opt<CacheMode> g_cache{"cache", cl::desc{"Cache compiled EVM code on disk"},
 		clEnumValN(CacheMode::read,  "r", "Read only. No new objects are added to cache."),
 		clEnumValN(CacheMode::write, "w", "Write only. No objects are loaded from cache."),
 		clEnumValN(CacheMode::clear, "c", "Clear the cache storage. Cache is disabled."),
-		clEnumValN(CacheMode::preload, "p", "Preload all cached objects."),
-		clEnumValEnd)};
+		clEnumValN(CacheMode::preload, "p", "Preload all cached objects."))};
 cl::opt<bool> g_stats{"st", cl::desc{"Statistics"}};
 cl::opt<bool> g_dump{"dump", cl::desc{"Dump LLVM IR module"}};
 
@@ -221,7 +221,7 @@ int64_t call_v2(
 
 class SymbolResolver : public llvm::SectionMemoryManager
 {
-	llvm::RuntimeDyld::SymbolInfo findSymbol(std::string const& _name) override
+	llvm::JITSymbol findSymbol(std::string const& _name) override
 	{
 		auto& jit = JITImpl::instance();
 
@@ -330,8 +330,13 @@ ExecFunc JITImpl::compile(evm_revision _rev, bool _staticCall, byte const* _code
 
 		prepare(*module);
 	}
+
 	if (g_dump)
-		module->dump();
+	{
+		llvm::raw_os_ostream cerr{std::cerr};
+		module->print(cerr, nullptr);
+	}
+
 
 	m_engine->addModule(std::move(module));
 	//listener->stateChanged(ExecState::CodeGen);

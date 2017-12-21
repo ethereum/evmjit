@@ -35,14 +35,12 @@ function(configure_llvm_project)
         # Only used here locally to setup the "llvm" imported target
         set(LIBS
             LLVMMCJIT
-            LLVMX86CodeGen LLVMX86Desc LLVMX86Info LLVMMCDisassembler
-            LLVMX86AsmPrinter LLVMX86Utils LLVMSelectionDAG LLVMAsmPrinter
-            LLVMDebugInfoCodeView LLVMCodeGen LLVMBitWriter LLVMipo
-            LLVMInstrumentation LLVMVectorize LLVMScalarOpts LLVMLinker
-            LLVMIRReader LLVMAsmParser LLVMInstCombine LLVMTransformUtils
-            LLVMExecutionEngine LLVMTarget LLVMAnalysis LLVMProfileData
-            LLVMRuntimeDyld LLVMObject LLVMMCParser LLVMBitReader LLVMMC
-            LLVMCore LLVMSupport
+            LLVMX86CodeGen LLVMGlobalISel LLVMX86Desc LLVMX86Info LLVMMCDisassembler
+            LLVMX86AsmPrinter LLVMX86Utils LLVMSelectionDAG LLVMAsmPrinter LLVMDebugInfoCodeView
+            LLVMDebugInfoMSF LLVMCodeGen LLVMipo LLVMInstrumentation LLVMVectorize LLVMScalarOpts
+            LLVMLinker LLVMIRReader LLVMAsmParser LLVMInstCombine LLVMTransformUtils LLVMBitWriter
+            LLVMExecutionEngine LLVMTarget LLVMAnalysis LLVMProfileData LLVMRuntimeDyld LLVMObject
+            LLVMMCParser LLVMBitReader LLVMMC LLVMCore LLVMBinaryFormat LLVMSupport LLVMDemangle
         )
 
         # System libs that LLVM depend on.
@@ -62,8 +60,8 @@ function(configure_llvm_project)
         include(ExternalProject)
         ExternalProject_Add(llvm
             PREFIX ${CMAKE_SOURCE_DIR}/deps
-            URL http://llvm.org/releases/3.9.1/llvm-3.9.1.src.tar.xz
-            URL_HASH SHA256=1fd90354b9cf19232e8f168faf2220e79be555df3aa743242700879e8fd329ee
+            URL http://llvm.org/releases/5.0.0/llvm-5.0.0.src.tar.xz
+            URL_HASH SHA256=e35dcbae6084adcf4abb32514127c5eabd7d63b733852ccdb31e06f1373136da
             DOWNLOAD_NO_PROGRESS TRUE
             BINARY_DIR ${CMAKE_SOURCE_DIR}/deps  # Build directly to install dir to avoid copy.
             CMAKE_ARGS -DCMAKE_BUILD_TYPE=Release
@@ -71,7 +69,8 @@ function(configure_llvm_project)
                        -DLLVM_ENABLE_TERMINFO=OFF  # Disable terminal color support
                        -DLLVM_ENABLE_ZLIB=OFF      # Disable compression support -- not needed at all
                        -DLLVM_TARGETS_TO_BUILD=X86
-                       -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF
+                       -DLLVM_INCLUDE_TOOLS=OFF
+                       -DLLVM_INCLUDE_EXAMPLES=OFF
                        -DLLVM_INCLUDE_TESTS=OFF
             LOG_CONFIGURE TRUE
             BUILD_COMMAND   ${BUILD_COMMAND}

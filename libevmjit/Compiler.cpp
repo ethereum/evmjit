@@ -142,7 +142,7 @@ void Compiler::resolveJumps()
 			if (auto constant = llvm::dyn_cast<llvm::ConstantInt>(destIdx))
 			{
 				// If destination index is a constant do direct jump to the destination block.
-				auto bb = jumpTable->findCaseValue(constant).getCaseSuccessor();
+				auto bb = jumpTable->findCaseValue(constant)->getCaseSuccessor();
 				jump->setSuccessor(0, bb);
 			}
 			else
@@ -170,7 +170,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(code_iterator _begin, code_itera
 	// Create main function
 	auto mainFuncType = llvm::FunctionType::get(Type::MainReturn, Type::RuntimePtr, false);
 	m_mainFunc = llvm::Function::Create(mainFuncType, llvm::Function::ExternalLinkage, _id, module.get());
-	m_mainFunc->getArgumentList().front().setName("rt");
+	m_mainFunc->args().begin()->setName("rt");
 
 	// Create entry basic block
 	auto entryBB = llvm::BasicBlock::Create(m_builder.getContext(), "Entry", m_mainFunc);
