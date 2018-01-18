@@ -500,11 +500,22 @@ static evm_result execute(evm_instance* instance, evm_context* context, evm_revi
 	return result;
 }
 
-static int set_option(evm_instance* instance, char const* name,
-	char const* value)
+static int set_option(evm_instance* instance, const char* name, const char* value) noexcept
 {
-	(void)instance, (void)name, (void)value;
-	return 0;
+    try
+    {
+        if (name == std::string{"hits-threshold"})
+        {
+            auto& jit = static_cast<JITImpl&>(*instance);
+            jit.hitThreshold = std::stoul(value);
+            return 1;
+        }
+        return 0;
+    }
+    catch (...)
+    {
+        return 0;
+    }
 }
 
 static evm_code_status get_code_status(evm_instance* instance,
