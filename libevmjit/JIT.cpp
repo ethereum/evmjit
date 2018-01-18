@@ -438,7 +438,7 @@ static evm_result execute(evm_instance* instance, evm_context* context, evm_revi
 
         if (codeEntry.hits <= jit.hitThreshold)
         {
-            result.status_code = EVM_UNSUPPORTED_CODE_TYPE;
+            result.status_code = EVM_REJECTED;
             return result;
         }
 
