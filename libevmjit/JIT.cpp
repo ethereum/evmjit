@@ -164,6 +164,8 @@ public:
 
 	evm_message const* currentMsg = nullptr;
 	std::vector<uint8_t> returnBuffer;
+
+    size_t hitThreshold = 0;
 };
 
 int64_t call_v2(
@@ -433,6 +435,15 @@ static evm_result execute(evm_instance* instance, evm_context* context, evm_revi
     if (!func)
     {
         //FIXME: We have a race condition here!
+
+        if (codeEntry.hits <= jit.hitThreshold)
+        {
+            result.status_code = EVM_UNSUPPORTED_CODE_TYPE;
+            return result;
+        }
+
+        if (g_stats)
+            std::cerr << "EVMJIT Compile " << codeIdentifier << " (" << codeEntry.hits << ")\n";
 
         const bool staticCall = (msg->flags & EVM_STATIC) != 0;
         func = jit.compile(rev, staticCall, ctx.code(), ctx.codeSize(), codeIdentifier);
