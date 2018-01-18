@@ -48,6 +48,15 @@ namespace
 {
 using ExecFunc = ReturnCode(*)(ExecutionContext*);
 
+struct CodeMapEntry
+{
+    ExecFunc func = nullptr;
+    size_t hits = 0;
+
+    CodeMapEntry() = default;
+    explicit CodeMapEntry(ExecFunc func) : func(func) {}
+};
+
 char toChar(evm_revision rev)
 {
 	switch (rev)
@@ -119,7 +128,7 @@ class JITImpl: public evm_instance
 	std::unique_ptr<llvm::ExecutionEngine> m_engine;
 	SymbolResolver const* m_memoryMgr = nullptr;
 	mutable std::mutex x_codeMap;
-	std::unordered_map<std::string, ExecFunc> m_codeMap;
+	std::unordered_map<std::string, CodeMapEntry> m_codeMap;
 
 	static llvm::LLVMContext& getLLVMContext()
 	{
@@ -146,7 +155,7 @@ public:
 
 	llvm::ExecutionEngine& engine() { return *m_engine; }
 
-	ExecFunc getExecFunc(std::string const& _codeIdentifier) const;
+	CodeMapEntry getExecFunc(std::string const& _codeIdentifier);
 	void mapExecFunc(std::string const& _codeIdentifier, ExecFunc _funcAddr);
 
 	ExecFunc compile(evm_revision _rev, bool _staticCall, byte const* _code, uint64_t _codeSize, std::string const& _codeIdentifier);
@@ -293,21 +302,18 @@ public:
 };
 
 
-
-
-ExecFunc JITImpl::getExecFunc(std::string const& _codeIdentifier) const
+CodeMapEntry JITImpl::getExecFunc(std::string const& _codeIdentifier)
 {
-	std::lock_guard<std::mutex> lock{x_codeMap};
-	auto it = m_codeMap.find(_codeIdentifier);
-	if (it != m_codeMap.end())
-		return it->second;
-	return nullptr;
+    std::lock_guard<std::mutex> lock{x_codeMap};
+    auto& entry = m_codeMap[_codeIdentifier];
+    ++entry.hits;
+    return entry;
 }
 
 void JITImpl::mapExecFunc(std::string const& _codeIdentifier, ExecFunc _funcAddr)
 {
-	std::lock_guard<std::mutex> lock{x_codeMap};
-	m_codeMap.emplace(_codeIdentifier, _funcAddr);
+    std::lock_guard<std::mutex> lock{x_codeMap};
+    m_codeMap[_codeIdentifier].func = _funcAddr;
 }
 
 ExecFunc JITImpl::compile(evm_revision _rev, bool _staticCall, byte const* _code, uint64_t _codeSize,
@@ -421,18 +427,24 @@ static evm_result execute(evm_instance* instance, evm_context* context, evm_revi
 	result.output_size = 0;
 	result.release = nullptr;
 
-	auto codeIdentifier = makeCodeId(msg->code_hash, rev, msg->flags);
-	auto execFunc = jit.getExecFunc(codeIdentifier);
-	if (!execFunc)
-	{
-		bool const staticCall = (msg->flags & EVM_STATIC) != 0;
-		execFunc = jit.compile(rev, staticCall, ctx.code(), ctx.codeSize(), codeIdentifier);
-		if (!execFunc)
-			return result;
-		jit.mapExecFunc(codeIdentifier, execFunc);
-	}
+    auto codeIdentifier = makeCodeId(msg->code_hash, rev, msg->flags);
+    auto codeEntry = jit.getExecFunc(codeIdentifier);
+    auto func = codeEntry.func;
+    if (!func)
+    {
+        //FIXME: We have a race condition here!
 
-	auto returnCode = execFunc(&ctx);
+        const bool staticCall = (msg->flags & EVM_STATIC) != 0;
+        func = jit.compile(rev, staticCall, ctx.code(), ctx.codeSize(), codeIdentifier);
+        if (!func)
+        {
+            result.status_code = EVM_INTERNAL_ERROR;
+            return result;
+        }
+        jit.mapExecFunc(codeIdentifier, func);
+    }
+
+    auto returnCode = func(&ctx);
 
 	if (returnCode == ReturnCode::Revert)
 	{
@@ -489,7 +501,7 @@ static evm_code_status get_code_status(evm_instance* instance,
 {
 	auto& jit = *reinterpret_cast<JITImpl*>(instance);
 	auto codeIdentifier = makeCodeId(code_hash, rev, flags);
-	if (jit.getExecFunc(codeIdentifier) != nullptr)
+	if (jit.getExecFunc(codeIdentifier).func)
 		return EVM_READY;
 	// TODO: Add support for EVM_CACHED.
 	return EVM_UNKNOWN;
