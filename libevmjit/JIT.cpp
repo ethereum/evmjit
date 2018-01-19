@@ -218,6 +218,24 @@ int64_t call_v2(
 	return r;
 }
 
+template<unsigned NumBits>
+void div(uint64_t quotient[], uint64_t reminder[], const uint64_t numerator[], const uint64_t divisor[])
+{
+	constexpr unsigned numWords = NumBits / 8 / sizeof(uint64_t);
+	static_assert(numWords * 8 * sizeof(uint64_t) == NumBits, "Invalid NumBits value");
+
+	std::array<uint64_t, numWords> scratch;  // NOLINT: Allowed to be uninitialized.
+	std::copy_n(numerator, numWords, quotient);
+
+	int status = llvm::APInt::tcDivide(quotient, divisor, reminder, scratch.data(), numWords);
+
+	if (status == 1)  // Division by 0.
+	{
+		std::fill_n(quotient, numWords, 0);
+		std::fill_n(reminder, numWords, 0);
+	}
+}
+
 
 class SymbolResolver : public llvm::SectionMemoryManager
 {
@@ -244,6 +262,8 @@ class SymbolResolver : public llvm::SectionMemoryManager
 			.Case("evm.get_tx_context", reinterpret_cast<uint64_t>(jit.host->get_tx_context))
 			.Case("evm.blockhash", reinterpret_cast<uint64_t>(jit.host->get_block_hash))
 			.Case("evm.log", reinterpret_cast<uint64_t>(jit.host->log))
+			.Case("external.evm.udivrem.i256", reinterpret_cast<uint64_t>(div<256>))
+			.Case("external.evm.udivrem.i512", reinterpret_cast<uint64_t>(div<512>))
 			.Default(0);
 		if (addr)
 			return {addr, llvm::JITSymbolFlags::Exported};
