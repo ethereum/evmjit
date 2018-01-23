@@ -518,28 +518,6 @@ static int set_option(evm_instance* instance, const char* name, const char* valu
     }
 }
 
-static evm_code_status get_code_status(evm_instance* instance,
-	evm_revision rev, uint32_t flags, evm_uint256be code_hash)
-{
-	auto& jit = *reinterpret_cast<JITImpl*>(instance);
-	auto codeIdentifier = makeCodeId(code_hash, rev, flags);
-	if (jit.getExecFunc(codeIdentifier).func)
-		return EVM_READY;
-	// TODO: Add support for EVM_CACHED.
-	return EVM_UNKNOWN;
-}
-
-static void prepare_code(evm_instance* instance, evm_revision rev, uint32_t flags,
-	evm_uint256be code_hash, unsigned char const* code, size_t code_size)
-{
-	auto& jit = *reinterpret_cast<JITImpl*>(instance);
-	auto codeIdentifier = makeCodeId(code_hash, rev, flags);
-	bool const staticCall = (flags & EVM_STATIC) != 0;
-	auto execFunc = jit.compile(rev, staticCall, code, code_size, codeIdentifier);
-	if (execFunc) // FIXME: What with error?
-		jit.mapExecFunc(codeIdentifier, execFunc);
-}
-
 }  // extern "C"
 
 void JITImpl::createEngine()
@@ -572,13 +550,8 @@ void JITImpl::createEngine()
 	//	Cache::preload(*m_engine, funcCache);
 }
 
-JITImpl::JITImpl():
-		evm_instance({EVM_ABI_VERSION,
-		              evmjit::destroy,
-		              evmjit::execute,
-		              evmjit::get_code_status,
-		              evmjit::prepare_code,
-		              evmjit::set_option})
+JITImpl::JITImpl()
+  : evm_instance({EVM_ABI_VERSION, evmjit::destroy, evmjit::execute, evmjit::set_option})
 {
 	parseOptions();
 
