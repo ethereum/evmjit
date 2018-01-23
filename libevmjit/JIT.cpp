@@ -186,10 +186,10 @@ int64_t call_v2(
 	auto& jit = JITImpl::instance();
 
 	evm_message msg;
-	msg.address = *_address;
-	msg.sender = _kind != EVM_DELEGATECALL ? jit.currentMsg->address : jit.currentMsg->sender;
+	msg.destination = *_address;
+	msg.sender = _kind != EVM_DELEGATECALL ? jit.currentMsg->destination : jit.currentMsg->sender;
 	msg.value = _kind != EVM_DELEGATECALL ? *_value : jit.currentMsg->value;
-	msg.input = _inputData;
+	msg.input_data = _inputData;
 	msg.input_size = _inputSize;
 	msg.gas = _gas;
 	msg.depth = jit.currentMsg->depth + 1;
@@ -411,11 +411,11 @@ static evm_result execute(evm_instance* instance, evm_context* context, evm_revi
 	rt.code = code;
 	rt.codeSize = code_size;
 	rt.gas = msg->gas;
-	rt.callData = msg->input;
+	rt.callData = msg->input_data;
 	rt.callDataSize = msg->input_size;
 	std::memcpy(&rt.apparentValue, &msg->value, sizeof(msg->value));
 	std::memset(&rt.address, 0, 12);
-	std::memcpy(&rt.address[12], &msg->address, sizeof(msg->address));
+	std::memcpy(&rt.address[12], &msg->destination, sizeof(msg->destination));
 	std::memset(&rt.caller, 0, 12);
 	std::memcpy(&rt.caller[12], &msg->sender, sizeof(msg->sender));
 	rt.depth = msg->depth;
