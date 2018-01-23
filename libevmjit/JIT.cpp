@@ -254,7 +254,7 @@ class SymbolResolver : public llvm::SectionMemoryManager
 			.Case("evm.call", reinterpret_cast<uint64_t>(call_v2))
 			.Case("evm.get_tx_context", reinterpret_cast<uint64_t>(jit.host->get_tx_context))
 			.Case("evm.blockhash", reinterpret_cast<uint64_t>(jit.host->get_block_hash))
-			.Case("evm.log", reinterpret_cast<uint64_t>(jit.host->log))
+			.Case("evm.log", reinterpret_cast<uint64_t>(jit.host->emit_log))
 			.Default(0);
 		if (addr)
 			return {addr, llvm::JITSymbolFlags::Exported};
