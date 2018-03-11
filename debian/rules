@@ -1,0 +1,6 @@
+#!/usr/bin/make -f
+export DH_OPTIONS
+export DH_VERBOSE=3
+
+%:
+	dh $@ -Dinclude -Dlibevmjit --buildsystem=cmake --sourcedirectory=.
