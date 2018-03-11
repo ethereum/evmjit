@@ -1,6 +1,6 @@
 Source: libevmjit
-Maintainer: Jeff Cliff<jeffrey.cliff@gmail.com>
-Uploaders: Jeff Cliff<jeffrey.cliff@gmail.com>
+Maintainer: Jeff Cliff <jeffrey.cliff@gmail.com>
+Uploaders: Jeff Cliff <jeffrey.cliff@gmail.com>
 Priority: optional
 Section: interpreters
 Standards-Version: 4.1.0
@@ -17,6 +17,6 @@ X-Python3-Version: >= 3.0
 Package: libevmjit
 Architecture: amd64
 Depends: libc6, llvm
-Description: A library for just-in-time compilation of Ethereum EVM code. 
+Description: Ethereum A library for just-in-time compilation of EVM code. 
  It can be used to substitute classic interpreter-like EVM Virtual Machine 
  in Ethereum client.
