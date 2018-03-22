@@ -336,21 +336,35 @@ typedef void (*evm_get_balance_fn)(struct evm_uint256be* result,
                                    struct evm_context* context,
                                    const struct evm_address* address);
 
-/// Get code callback function.
+/// Get code size callback function.
 ///
-/// This callback function is used by an EVM to get the code of a contract of
-/// given address.
+/// This callback function is used by an EVM to get the size of the code stored
+/// in the account at the given address. For accounts not having a code, this
+/// function returns 0.
+typedef size_t (*evm_get_code_size_fn)(struct evm_context* context,
+                                       const struct evm_address* address);
+
+/// Copy code callback function.
 ///
-/// @param[out] result_code  The pointer to the contract code. This argument is
-///                          optional. If NULL is provided, the host MUST only
-///                          return the code size. It will be freed by the Client.
-/// @param      context      The pointer to the Host execution context.
+/// This callback function is used by an EVM to request a copy of the code
+/// of the given account to the memory buffer provided by the EVM.
+/// The Client MUST copy the requested code, starting with the given offset,
+/// to the provided memory buffer up to the size of the buffer or the size of
+/// the code, whatever is smaller.
+///
+/// @param context      The pointer to the Client execution context.
 ///                          @see ::evm_context.
-/// @param      address      The address of the contract.
-/// @return                  The size of the code.
-typedef size_t (*evm_get_code_fn)(const uint8_t** result_code,
-                                  struct evm_context* context,
-                                  const struct evm_address* address);
+/// @param address      The address of the account.
+/// @param code_offset  The offset of the code to copy.
+/// @param buffer       The pointer to the memory buffer allocated by the EVM
+///                     to store a copy of the requested code.
+/// @param buffer_size  The size of the memory buffer.
+/// @return             The number of bytes copied to the buffer by the Client.
+typedef size_t (*evm_copy_code_fn)(struct evm_context* context,
+                                   const struct evm_address* address,
+                                   size_t code_offset,
+                                   uint8_t* buffer,
+                                   size_t buffer_size);
 
 /// Selfdestruct callback function.
 ///
@@ -408,7 +422,8 @@ struct evm_context_fn_table {
     evm_get_storage_fn get_storage;
     evm_set_storage_fn set_storage;
     evm_get_balance_fn get_balance;
-    evm_get_code_fn get_code;
+    evm_get_code_size_fn get_code_size;
+    evm_copy_code_fn copy_code;
     evm_selfdestruct_fn selfdestruct;
     evm_call_fn call;
     evm_get_tx_context_fn get_tx_context;
