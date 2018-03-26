@@ -165,6 +165,8 @@ public:
 	evm_message const* currentMsg = nullptr;
 	std::vector<uint8_t> returnBuffer;
 
+    std::vector<uint8_t> codeBuffer;
+
     size_t hitThreshold = 0;
 };
 
@@ -230,6 +232,20 @@ int64_t call_v2(
 }
 
 
+/// A wrapper for new EVM-C copycode callback function.
+size_t getCode(uint8_t** o_pCode, evm_context* _ctx, evm_address const* _address) noexcept
+{
+    auto& jit = JITImpl::instance();
+    size_t codeSize = jit.host->get_code_size(_ctx, _address);
+    jit.codeBuffer.resize(codeSize);  // Allocate needed memory to store the full code.
+
+    // Copy the code to JIT's buffer and send the buffer reference back to LLVM.
+    size_t size =
+        jit.host->copy_code(_ctx, _address, 0, jit.codeBuffer.data(), jit.codeBuffer.size());
+    *o_pCode = jit.codeBuffer.data();
+    return size;
+}
+
 class SymbolResolver : public llvm::SectionMemoryManager
 {
 	llvm::JITSymbol findSymbol(std::string const& _name) override
@@ -243,22 +259,23 @@ class SymbolResolver : public llvm::SectionMemoryManager
 		llvm::StringRef unprefixedName = (prefix != '\0' && _name[0] == prefix)
 			? llvm::StringRef{_name}.drop_front() : llvm::StringRef{_name};
 
-		auto addr = llvm::StringSwitch<uint64_t>(unprefixedName)
-			.Case("env_sha3", reinterpret_cast<uint64_t>(&keccak))
-			.Case("evm.exists", reinterpret_cast<uint64_t>(jit.host->account_exists))
-			.Case("evm.sload", reinterpret_cast<uint64_t>(jit.host->get_storage))
-			.Case("evm.sstore", reinterpret_cast<uint64_t>(jit.host->set_storage))
-			.Case("evm.balance", reinterpret_cast<uint64_t>(jit.host->get_balance))
-			.Case("evm.codesize", reinterpret_cast<uint64_t>(jit.host->get_code_size))
-			.Case("evm.code", reinterpret_cast<uint64_t>(jit.host->get_code))
-			.Case("evm.selfdestruct", reinterpret_cast<uint64_t>(jit.host->selfdestruct))
-			.Case("evm.call", reinterpret_cast<uint64_t>(call_v2))
-			.Case("evm.get_tx_context", reinterpret_cast<uint64_t>(jit.host->get_tx_context))
-			.Case("evm.blockhash", reinterpret_cast<uint64_t>(jit.host->get_block_hash))
-			.Case("evm.log", reinterpret_cast<uint64_t>(jit.host->emit_log))
-			.Default(0);
-		if (addr)
-			return {addr, llvm::JITSymbolFlags::Exported};
+        auto addr =
+            llvm::StringSwitch<uint64_t>(unprefixedName)
+                .Case("env_sha3", reinterpret_cast<uint64_t>(&keccak))
+                .Case("evm.exists", reinterpret_cast<uint64_t>(jit.host->account_exists))
+                .Case("evm.sload", reinterpret_cast<uint64_t>(jit.host->get_storage))
+                .Case("evm.sstore", reinterpret_cast<uint64_t>(jit.host->set_storage))
+                .Case("evm.balance", reinterpret_cast<uint64_t>(jit.host->get_balance))
+                .Case("evm.codesize", reinterpret_cast<uint64_t>(jit.host->get_code_size))
+                .Case("evm.code", reinterpret_cast<uint64_t>(getCode))
+                .Case("evm.selfdestruct", reinterpret_cast<uint64_t>(jit.host->selfdestruct))
+                .Case("evm.call", reinterpret_cast<uint64_t>(call_v2))
+                .Case("evm.get_tx_context", reinterpret_cast<uint64_t>(jit.host->get_tx_context))
+                .Case("evm.blockhash", reinterpret_cast<uint64_t>(jit.host->get_block_hash))
+                .Case("evm.log", reinterpret_cast<uint64_t>(jit.host->emit_log))
+                .Default(0);
+        if (addr)
+            return {addr, llvm::JITSymbolFlags::Exported};
 
 		// Fallback to default implementation that would search for the symbol
 		// in the current process. Use the original prefixed symbol name.
