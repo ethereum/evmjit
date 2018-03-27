@@ -170,19 +170,9 @@ public:
     size_t hitThreshold = 0;
 };
 
-int64_t call_v2(
-	evm_context* _ctx,
-	int _kind,
-	int64_t _gas,
-	evm_address const* _address,
-	evm_uint256be const* _value,
-	uint8_t const* _inputData,
-	size_t _inputSize,
-	uint8_t* _outputData,
-	size_t _outputSize,
-	uint8_t const** o_bufData,
-	size_t* o_bufSize
-) noexcept
+int64_t call(evm_context* _ctx, int _kind, int64_t _gas, evm_address const* _address,
+    evm_uint256be const* _value, uint8_t const* _inputData, size_t _inputSize, uint8_t* _outputData,
+    size_t _outputSize, uint8_t const** o_bufData, size_t* o_bufSize) noexcept
 {
 	// FIXME: Handle unexpected exceptions.
 	auto& jit = JITImpl::instance();
@@ -269,7 +259,7 @@ class SymbolResolver : public llvm::SectionMemoryManager
                 .Case("evm.codesize", reinterpret_cast<uint64_t>(jit.host->get_code_size))
                 .Case("evm.code", reinterpret_cast<uint64_t>(getCode))
                 .Case("evm.selfdestruct", reinterpret_cast<uint64_t>(jit.host->selfdestruct))
-                .Case("evm.call", reinterpret_cast<uint64_t>(call_v2))
+                .Case("evm.call", reinterpret_cast<uint64_t>(call))
                 .Case("evm.get_tx_context", reinterpret_cast<uint64_t>(jit.host->get_tx_context))
                 .Case("evm.blockhash", reinterpret_cast<uint64_t>(jit.host->get_block_hash))
                 .Case("evm.log", reinterpret_cast<uint64_t>(jit.host->emit_log))
@@ -518,7 +508,7 @@ static evm_result execute(evm_instance* instance, evm_context* context, evm_revi
 	return result;
 }
 
-static int set_option(evm_instance* instance, const char* name, const char* value) noexcept
+static int setOption(evm_instance* instance, const char* name, const char* value) noexcept
 {
     try
     {
@@ -569,7 +559,7 @@ void JITImpl::createEngine()
 }
 
 JITImpl::JITImpl()
-  : evm_instance({EVM_ABI_VERSION, evmjit::destroy, evmjit::execute, evmjit::set_option})
+  : evm_instance({EVM_ABI_VERSION, evmjit::destroy, evmjit::execute, evmjit::setOption})
 {
 	parseOptions();
 
