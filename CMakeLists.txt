@@ -44,11 +44,10 @@ endif()
 include(ProjectLLVM)
 configure_llvm_project()
 
-add_subdirectory(libevmjit)
+set(EVMC_BUILD_EXAMPLES OFF)
+add_subdirectory(evmc)
 
-if (EVMJIT_EXAMPLES)
-	add_subdirectory(examples)
-endif()
+add_subdirectory(libevmjit)
 
 if (EVMJIT_TESTS)
 	enable_testing()

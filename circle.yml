@@ -1,5 +1,10 @@
 defaults:
 
+  git-update-submodules: &git-update-submodules
+    run:
+      name: "Update git submodules"
+      command: git submodule update --init
+
   environment-info: &environment-info
     run:
       name: "Environment info"
@@ -55,6 +60,7 @@ defaults:
 
   default-steps: &default-steps
     - checkout
+    - *git-update-submodules
     - *environment-info
     - *install-dependencies
     - *configure
