@@ -23,7 +23,7 @@ public:
 		bool dumpCFG = false;
 	};
 
-	Compiler(Options const& _options, evm_revision _rev, bool _staticCall, llvm::LLVMContext& _llvmContext);
+	Compiler(Options const& _options, evmc_revision _rev, bool _staticCall, llvm::LLVMContext& _llvmContext);
 
 	std::unique_ptr<llvm::Module> compile(code_iterator _begin, code_iterator _end, std::string const& _id);
 
@@ -39,7 +39,7 @@ private:
 	Options const& m_options;
 
 	/// EVM revision.
-	evm_revision m_rev;
+	evmc_revision m_rev;
 
 	bool const m_staticCall = false;
 

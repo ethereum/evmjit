@@ -12,6 +12,7 @@ LLVM installation is not needed, because CMake will download and build LLVM from
 However, LLVM requires **Python** interpreter to be built.
 
 ```sh
+git submodule update --init --recursive
 mkdir build
 cd build
 cmake ..
@@ -21,12 +22,3 @@ cmake --build . --config RelWithDebInfo
 ## Options
 
 Options to evmjit library can be passed by environmental variable, e.g. `EVMJIT="-help" testeth --jit`.
-
-## Documentation
-
-The documentation can be built using Doxygen:
-```sh
-doxygen docs/Doxyfile
-```
-
-And it is also [available online](https://ethereum.github.io/evmjit/docs) to view.

@@ -44,7 +44,7 @@ namespace jit
 
 static const auto c_destIdxLabel = "destIdx";
 
-Compiler::Compiler(Options const& _options, evm_revision _rev, bool _staticCall, llvm::LLVMContext& _llvmContext):
+Compiler::Compiler(Options const& _options, evmc_revision _rev, bool _staticCall, llvm::LLVMContext& _llvmContext):
 	m_options(_options),
 	m_rev(_rev),
 	m_staticCall(_staticCall),
@@ -688,7 +688,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 
 		case Instruction::RETURNDATASIZE:
 		{
-			if (m_rev < EVM_BYZANTIUM)
+			if (m_rev < EVMC_BYZANTIUM)
 				goto invalidInstruction;
 
 			auto returnBufSizePtr = _runtimeManager.getReturnBufSizePtr();
@@ -742,7 +742,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 
 		case Instruction::RETURNDATACOPY:
 		{
-			if (m_rev < EVM_BYZANTIUM)
+			if (m_rev < EVMC_BYZANTIUM)
 				goto invalidInstruction;
 
 			auto destMemIdx = stack.pop();
@@ -802,7 +802,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 
 			_gasMeter.commitCostBlock();
 			auto gas = _runtimeManager.getGas();
-			llvm::Value* gasKept = (m_rev >= EVM_TANGERINE_WHISTLE) ?
+			llvm::Value* gasKept = (m_rev >= EVMC_TANGERINE_WHISTLE) ?
 			                       m_builder.CreateLShr(gas, 6) :
 			                       m_builder.getInt64(0);
 			auto createGas = m_builder.CreateSub(gas, gasKept, "create.gas", true, true);
@@ -834,10 +834,10 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 		case Instruction::STATICCALL:
 		{
 			// Handle invalid instructions.
-			if (inst == Instruction::DELEGATECALL && m_rev < EVM_HOMESTEAD)
+			if (inst == Instruction::DELEGATECALL && m_rev < EVMC_HOMESTEAD)
 				goto invalidInstruction;
 
-			if (inst == Instruction::STATICCALL && m_rev < EVM_BYZANTIUM)
+			if (inst == Instruction::STATICCALL && m_rev < EVMC_BYZANTIUM)
 				goto invalidInstruction;
 
 			auto callGas = stack.pop();
@@ -875,7 +875,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			{
 				auto accountExists = _ext.exists(address);
 				auto noPenaltyCond = accountExists;
-				if (m_rev >= EVM_SPURIOUS_DRAGON)
+				if (m_rev >= EVMC_SPURIOUS_DRAGON)
 					noPenaltyCond = m_builder.CreateOr(accountExists, noTransfer);
 				auto penalty = m_builder.CreateSelect(noPenaltyCond,
 				                                      m_builder.getInt64(0),
@@ -884,7 +884,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 				                _runtimeManager.getGasPtr());
 			}
 
-			if (m_rev >= EVM_TANGERINE_WHISTLE)
+			if (m_rev >= EVMC_TANGERINE_WHISTLE)
 			{
 				auto gas = _runtimeManager.getGas();
 				auto gas64th = m_builder.CreateLShr(gas, 6);
@@ -906,9 +906,9 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 			{
 				switch (inst)
 				{
-				case Instruction::CALL: return EVM_CALL;
-				case Instruction::CALLCODE: return EVM_CALLCODE;
-				case Instruction::DELEGATECALL: return EVM_DELEGATECALL;
+				case Instruction::CALL: return EVMC_CALL;
+				case Instruction::CALLCODE: return EVMC_CALLCODE;
+				case Instruction::DELEGATECALL: return EVMC_DELEGATECALL;
 				case Instruction::STATICCALL: return EVM_STATICCALL;
 				default: LLVM_BUILTIN_UNREACHABLE;
 				}
@@ -931,7 +931,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 		case Instruction::REVERT:
 		{
 			auto const isRevert = inst == Instruction::REVERT;
-			if (isRevert && m_rev < EVM_BYZANTIUM)
+			if (isRevert && m_rev < EVMC_BYZANTIUM)
 				goto invalidInstruction;
 
 			auto index = stack.pop();
@@ -950,11 +950,11 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, RuntimeManager& _runti
 				goto invalidInstruction;
 
 			auto dest = stack.pop();
-			if (m_rev >= EVM_TANGERINE_WHISTLE)
+			if (m_rev >= EVMC_TANGERINE_WHISTLE)
 			{
 				auto destExists = _ext.exists(dest);
 				auto noPenaltyCond = destExists;
-				if (m_rev >= EVM_SPURIOUS_DRAGON)
+				if (m_rev >= EVMC_SPURIOUS_DRAGON)
 				{
 					auto addr = Endianness::toNative(m_builder, _runtimeManager.getAddress());
 					auto balance = _ext.balance(addr);

@@ -284,7 +284,7 @@ llvm::Function* getCallFunc(llvm::Module* _module)
 		builder.CreateCondBr(depthOk, checkTransferBB, failBB);
 
 		builder.SetInsertPoint(checkTransferBB);
-		auto notDelegateCall = builder.CreateICmpNE(&callKind, builder.getInt32(EVM_DELEGATECALL));
+		auto notDelegateCall = builder.CreateICmpNE(&callKind, builder.getInt32(EVMC_DELEGATECALL));
 		llvm::Value* value = builder.CreateLoad(&valuePtr);
 		auto valueNonZero = builder.CreateICmpNE(value, Constant::get(0));
 		auto transfer = builder.CreateAnd(notDelegateCall, valueNonZero);
@@ -588,7 +588,7 @@ std::tuple<llvm::Value*, llvm::Value*> Ext::create(llvm::Value* _gas,
 	auto myAddr = Endianness::toBE(m_builder, m_builder.CreateTrunc(Endianness::toNative(m_builder, getRuntimeManager().getAddress()), addrTy));
 	getRuntimeManager().resetReturnBuf();
 	auto ret = createCABICall(
-		func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVM_CREATE),
+		func, {getRuntimeManager().getEnvPtr(), m_builder.getInt32(EVMC_CREATE),
 			   _gas, llvm::UndefValue::get(addrTy), value, inData, inSize, pAddr,
 			   m_builder.getInt64(20),
 			   getRuntimeManager().getReturnBufDataPtr(), getRuntimeManager().getReturnBufSizePtr(),

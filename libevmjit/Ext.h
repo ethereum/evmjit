@@ -12,11 +12,11 @@ namespace eth
 namespace jit
 {
 
-/// The flag indicating call failure in evm_call_fn() -- highest bit set.
+/// The flag indicating call failure in evmc_call_fn() -- highest bit set.
 constexpr int64_t EVM_CALL_FAILURE = 0x8000000000000000;
 
 /// The hackish constant indicating EVM_CALL + EVM_STATIC flag.
-constexpr int EVM_STATICCALL = EVM_CREATE + 1;
+constexpr int EVM_STATICCALL = EVMC_CREATE + 1;
 
 class Memory;
 

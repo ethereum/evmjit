@@ -1,7 +1,6 @@
 get_filename_component(EVMJIT_INCLUDE_DIR ../include ABSOLUTE)
 
 set(SOURCES
-	${EVMJIT_INCLUDE_DIR}/evm.h
 	JIT.cpp				JIT.h
 	Arith256.cpp		Arith256.h
 	Array.cpp			Array.h
@@ -53,7 +52,7 @@ target_include_directories(evmjit SYSTEM PRIVATE ${LLVM_INCLUDE_DIRECTORIES})
 target_include_directories(evmjit PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/gen)
 target_include_directories(evmjit PUBLIC ${EVMJIT_INCLUDE_DIR})
 
-target_link_libraries(evmjit PRIVATE LLVM::JIT)
+target_link_libraries(evmjit PRIVATE evmc LLVM::JIT)
 set_target_properties(evmjit PROPERTIES
 	VERSION ${EVMJIT_VERSION}
 	SOVERSION ${EVMJIT_SOVERSION}
@@ -85,6 +84,10 @@ function(get_link_libraries OUTPUT_LIST TARGET)
 	set(LIB_FILES "")
 	foreach(LIB ${LIBS})
 		if (TARGET ${LIB})
+            get_target_property(type ${LIB} TYPE)
+            if(type STREQUAL INTERFACE_LIBRARY)
+                continue()  # Skip interface libraries.
+            endif()
 			list(FIND VISITED_TARGETS ${LIB} VISITED)
 			if (${VISITED} EQUAL -1)
 				get_target_property(LIB_FILE ${LIB} LOCATION)

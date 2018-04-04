@@ -1,6 +1,6 @@
 #pragma once
 
-#include <evm.h>
+#include <evmc.h>
 
 #ifdef _MSC_VER
 #ifdef evmjit_EXPORTS
@@ -20,7 +20,7 @@ extern "C" {
 /// Create EVMJIT instance.
 ///
 /// @return  The EVMJIT instance.
-EXPORT struct evm_instance* evmjit_create(void);
+EXPORT struct evmc_instance* evmjit_create(void);
 
 #if __cplusplus
 }

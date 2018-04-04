@@ -1,6 +1,6 @@
 #pragma once
 
-#include <evm.h>
+#include <evmc.h>
 #include "CompilerHelper.h"
 #include "Instruction.h"
 
@@ -16,7 +16,7 @@ using namespace evmjit;
 class GasMeter : public CompilerHelper // TODO: Use RuntimeHelper
 {
 public:
-	GasMeter(IRBuilder& _builder, RuntimeManager& _runtimeManager, evm_revision rev);
+	GasMeter(IRBuilder& _builder, RuntimeManager& _runtimeManager, evmc_revision rev);
 
 	/// Count step cost of instruction
 	void count(Instruction _inst);
@@ -61,7 +61,7 @@ private:
 	RuntimeManager& m_runtimeManager;
 
 	/// EVM revision.
-	evm_revision m_rev;
+	evmc_revision m_rev;
 };
 
 }
