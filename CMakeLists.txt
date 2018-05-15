@@ -44,7 +44,6 @@ endif()
 include(ProjectLLVM)
 configure_llvm_project()
 
-option(EVMC_BUILD_EXAMPLES "Build EVMC examples" ON)
 add_subdirectory(evmc)
 
 add_subdirectory(libevmjit)
