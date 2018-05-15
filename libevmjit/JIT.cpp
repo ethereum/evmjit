@@ -11,7 +11,7 @@
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_os_ostream.h>
-#include <evmc.h>
+#include <evmc/evmc.h>
 #include "preprocessor/llvm_includes_end.h"
 
 #include "Ext.h"
@@ -560,7 +560,14 @@ void JITImpl::createEngine()
 }
 
 JITImpl::JITImpl()
-  : evmc_instance({EVMC_ABI_VERSION, evmjit::destroy, evmjit::execute, evmjit::setOption})
+  : evmc_instance({
+        EVMC_ABI_VERSION,
+        "evmjit",
+        EVMJIT_VERSION,
+        evmjit::destroy,
+        evmjit::execute,
+        evmjit::setOption,
+    })
 {
 	parseOptions();
 

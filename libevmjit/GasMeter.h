@@ -1,6 +1,6 @@
 #pragma once
 
-#include <evmc.h>
+#include <evmc/evmc.h>
 #include "CompilerHelper.h"
 #include "Instruction.h"
 
