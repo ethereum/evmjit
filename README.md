@@ -5,6 +5,12 @@
 EVM JIT is a library for just-in-time compilation of Ethereum EVM code.
 It can be used to substitute classic interpreter-like EVM Virtual Machine in Ethereum client.
 
+## Maintainers
+
+**NOTE: This project is not maintained. Do not use it for anything important.**
+
+Looking for maintainers! [Please state your interest here.](https://github.com/ethereum/evmjit/issues/184)
+
 ## Build
 
 The EVMJIT project uses **CMake** tool to configure the build and depends only on the LLVM library.
