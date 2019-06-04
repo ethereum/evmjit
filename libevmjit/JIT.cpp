@@ -89,17 +89,17 @@ std::string makeCodeId(evmc_uint256be codeHash, evmc_revision rev, uint32_t flag
 	return str;
 }
 
-void printVersion()
+void printVersion(llvm::raw_ostream &out)
 {
-	std::cout << "Ethereum EVM JIT Compiler (http://github.com/ethereum/evmjit):\n"
-			  << "  EVMJIT version " << EVMJIT_VERSION << "\n"
+	out << "Ethereum EVM JIT Compiler (http://github.com/ethereum/evmjit):\n"
+			<< "  EVMJIT version " << EVMJIT_VERSION << "\n"
 #ifdef NDEBUG
-			  << "  Optimized build, "
+			<< "  Optimized build, "
 #else
-			  << "  DEBUG build, "
+			<< "  DEBUG build, "
 #endif
-			  << __DATE__ << " (" << __TIME__ << ")\n"
-			  << std::endl;
+			<< __DATE__ << " (" << __TIME__ << ")\n"
+			<< "\n";
 }
 
 namespace cl = llvm::cl;

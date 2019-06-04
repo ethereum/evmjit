@@ -106,7 +106,7 @@ llvm::Function* Memory::createFunc(bool _isStore, llvm::Type* _valueType)
 	InsertPointGuard guard(m_builder); // Restores insert point at function exit
 
 	m_builder.SetInsertPoint(llvm::BasicBlock::Create(func->getContext(), {}, func));
-	
+
 	auto iter = func->arg_begin();
 	llvm::Argument* mem = &(*iter++);
 	mem->setName("mem");
@@ -240,7 +240,7 @@ void Memory::copyBytes(llvm::Value* _srcPtr, llvm::Value* _srcSize, llvm::Value*
 	auto padIdx = m_builder.CreateNUWAdd(dstIdx, bytesToCopy, "padIdx");
 	auto dst = m_memory.getPtr(getRuntimeManager().getMem(), dstIdx);
 	auto pad = m_memory.getPtr(getRuntimeManager().getMem(), padIdx);
-	m_builder.CreateMemCpy(dst, src, bytesToCopy, 0);
+	m_builder.CreateMemCpy(dst, /*DstAlign*/ 0, src, /*SrcAlign*/ 0, bytesToCopy);
 	m_builder.CreateMemSet(pad, m_builder.getInt8(0), bytesToZero, 0);
 }
 
@@ -267,7 +267,7 @@ void Memory::copyBytesNoPadding(llvm::Value* _srcPtr, llvm::Value* _srcSize, llv
 	auto src = m_builder.CreateGEP(_srcPtr, srcIdx, "src");
 	auto dstIdx = m_builder.CreateTrunc(_destMemIdx, Type::Size, "dstIdx");
 	auto dst = m_memory.getPtr(getRuntimeManager().getMem(), dstIdx);
-	m_builder.CreateMemCpy(dst, src, reqBytes, 0);
+	m_builder.CreateMemCpy(dst, /*DstAlign*/ 0, src, /*SrcAlign*/ 0, reqBytes);
 }
 
 }

@@ -36,8 +36,7 @@ namespace
 	std::string getVersionedCacheDir()
 	{
 		llvm::SmallString<256> path;
-		llvm::sys::path::user_cache_directory(path, "ethereum", "evmjit",
-		                                      std::to_string(c_internalABIVersion));
+		userCacheDirectory(path, "ethereum", "evmjit", std::to_string(c_internalABIVersion));
 		return path.str();
 	}
 
