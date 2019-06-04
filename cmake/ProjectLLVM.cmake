@@ -60,8 +60,8 @@ function(configure_llvm_project)
         include(ExternalProject)
         ExternalProject_Add(llvm
             PREFIX ${CMAKE_SOURCE_DIR}/deps
-            URL http://llvm.org/releases/5.0.0/llvm-5.0.0.src.tar.xz
-            URL_HASH SHA256=e35dcbae6084adcf4abb32514127c5eabd7d63b733852ccdb31e06f1373136da
+            URL http://llvm.org/releases/8.0.0/llvm-8.0.0.src.tar.xz
+            URL_HASH SHA256=8872be1b12c61450cacc82b3d153eab02be2546ef34fa3580ed14137bb26224c
             DOWNLOAD_NO_PROGRESS TRUE
             BINARY_DIR ${CMAKE_SOURCE_DIR}/deps  # Build directly to install dir to avoid copy.
             CMAKE_ARGS -DCMAKE_BUILD_TYPE=Release
