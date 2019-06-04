@@ -432,7 +432,7 @@ llvm::Value* Ext::calldataload(llvm::Value* _idx)
 	auto copySize = m_builder.CreateNUWSub(end, idx);
 	auto padSize = m_builder.CreateNUWSub(m_builder.getInt64(32), copySize);
 	auto dataBegin = m_builder.CreateGEP(Type::Byte, getRuntimeManager().getCallData(), idx);
-	m_builder.CreateMemCpy(result, dataBegin, copySize, 1);
+	m_builder.CreateMemCpy(result, /*DstAlign*/ 1, dataBegin, /*SrcAlign*/ 1, copySize);
 	auto pad = m_builder.CreateGEP(Type::Byte, result, copySize);
 	m_builder.CreateMemSet(pad, m_builder.getInt8(0), padSize, 1);
 
@@ -531,7 +531,7 @@ void Ext::log(llvm::Value* _memIdx, llvm::Value* _numBytes, llvm::ArrayRef<llvm:
 
 	auto addrTy = m_builder.getIntNTy(160);
 	auto func = getLogFunc(getModule());
-	
+
 	auto myAddr = Endianness::toBE(m_builder, m_builder.CreateTrunc(Endianness::toNative(m_builder, getRuntimeManager().getAddress()), addrTy));
 	createCABICall(func, {
 		getRuntimeManager().getEnvPtr(), myAddr, dataPtr, dataSize, m_topics, numTopics
