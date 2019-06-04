@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include <llvm/Support/Debug.h>
+#include <llvm/Support/Path.h>
 
 #include "BuildInfo.gen.h"
 
@@ -178,6 +179,68 @@ defkeccak(256)
 void keccak(uint8_t const* _data, uint64_t _size, uint8_t* o_hash)
 {
 	keccak_256(o_hash, 32, _data, _size);
+}
+
+namespace
+{
+
+bool getDarwinConfDir(bool _tempDir, llvm::SmallVectorImpl<char> &_result) {
+#if defined(_CS_DARWIN_USER_TEMP_DIR) && defined(_CS_DARWIN_USER_CACHE_DIR)
+	// On Darwin, use DARWIN_USER_TEMP_DIR or DARWIN_USER_CACHE_DIR.
+	// macros defined in <unistd.h> on darwin >= 9
+	int ConfName = _tempDir ? _CS_DARWIN_USER_TEMP_DIR
+		: _CS_DARWIN_USER_CACHE_DIR;
+	size_t ConfLen = confstr(ConfName, nullptr, 0);
+	if (ConfLen > 0) {
+		do {
+			_result.resize(ConfLen);
+			ConfLen = confstr(ConfName, _result.data(), _result.size());
+		} while (ConfLen > 0 && ConfLen != _result.size());
+
+		if (ConfLen > 0) {
+			assert(_result.back() == 0);
+			_result.pop_back();
+			return true;
+		}
+
+		_result.clear();
+	}
+#endif
+	return false;
+}
+
+bool getUserCacheDir(llvm::SmallVectorImpl<char> &_result)
+{
+	// First try using XDS_CACHE_HOME env variable,
+	// as specified in XDG Base Directory Specification at
+	// http://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html
+	if (const char *XdsCacheDir = std::getenv("XDS_CACHE_HOME")) {
+		_result.clear();
+		_result.append(XdsCacheDir, XdsCacheDir + strlen(XdsCacheDir));
+		return true;
+	}
+
+	// Try Darwin configuration query
+	if (getDarwinConfDir(false, _result))
+		return true;
+
+	// Use "$HOME/.cache" if $HOME is available
+	if (llvm::sys::path::home_directory(_result)) {
+		llvm::sys::path::append(_result, ".cache");
+		return true;
+	}
+
+	return false;
+}
+}
+
+bool userCacheDirectory(llvm::SmallVectorImpl<char> &_result, const llvm::Twine &_path1, const llvm::Twine &_path2, const llvm::Twine &_path3)
+{
+	if (getUserCacheDir(_result)) {
+		llvm::sys::path::append(_result, _path1, _path2, _path3);
+		return true;
+	}
+	return false;
 }
 
 }
