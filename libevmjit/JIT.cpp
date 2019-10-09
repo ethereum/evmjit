@@ -12,6 +12,7 @@
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_os_ostream.h>
 #include <evmc/evmc.h>
+#include <evmc/helpers.h>
 #include "preprocessor/llvm_includes_end.h"
 
 #include "Ext.h"
@@ -28,7 +29,6 @@ static_assert(sizeof(evmc_uint256be) == 32, "evmc_uint256be is too big");
 static_assert(sizeof(evmc_address) == 20, "evmc_address is too big");
 static_assert(sizeof(evmc_result) == 64, "evmc_result does not fit cache line");
 static_assert(sizeof(evmc_message) <= 18*8, "evmc_message not optimally packed");
-static_assert(offsetof(evmc_message, code_hash) % 8 == 0, "evmc_message.code_hash not aligned");
 
 // Check enums match int size.
 // On GCC/clang the underlying type should be unsigned int, on MSVC int
@@ -36,7 +36,7 @@ static_assert(sizeof(evmc_call_kind)  == sizeof(int), "Enum `evmc_call_kind` is 
 static_assert(sizeof(evmc_revision)       == sizeof(int), "Enum `evmc_revision` is not the size of int");
 
 constexpr size_t optionalDataSize = sizeof(evmc_result) - offsetof(evmc_result, create_address);
-static_assert(optionalDataSize == sizeof(evmc_result_optional_data), "");
+static_assert(optionalDataSize == sizeof(evmc_result_optional_storage), "");
 
 
 namespace dev
@@ -68,6 +68,8 @@ char toChar(evmc_revision rev)
 	case EVMC_SPURIOUS_DRAGON: return 'S';
 	case EVMC_BYZANTIUM: return 'B';
 	case EVMC_CONSTANTINOPLE: return 'C';
+  case EVMC_PETERSBURG: return 'P';
+  case EVMC_ISTANBUL: return 'I';
 	}
 	LLVM_BUILTIN_UNREACHABLE;
 }
@@ -161,7 +163,7 @@ public:
 
 	ExecFunc compile(evmc_revision _rev, bool _staticCall, byte const* _code, uint64_t _codeSize, std::string const& _codeIdentifier);
 
-	evmc_context_fn_table const* host = nullptr;
+	evmc_host_interface const* host = nullptr;
 
 	evmc_message const* currentMsg = nullptr;
 	std::vector<uint8_t> returnBuffer;
@@ -196,8 +198,7 @@ int64_t call(evmc_context* _ctx, int _kind, int64_t _gas, evmc_address const* _a
 		msg.kind = static_cast<evmc_call_kind>(_kind);
 
 	// FIXME: Handle code hash.
-	evmc_result result;
-	jit.host->call(&result, _ctx, &msg);
+	evmc_result result = jit.host->call(_ctx, &msg);
 	// FIXME: Clarify when gas_left is valid.
 	int64_t r = result.gas_left;
 
@@ -400,6 +401,12 @@ static void destroy(evmc_instance* instance)
 	assert(instance == static_cast<void*>(&JITImpl::instance()));
 }
 
+static evmc_capabilities_flagset getCapabilities(evmc_instance* instance)
+{
+  (void) instance;
+  return EVMC_CAPABILITY_EVM1;
+}
+
 static evmc_result execute(evmc_instance* instance, evmc_context* context, evmc_revision rev,
 	evmc_message const* msg, uint8_t const* code, size_t code_size)
 {
@@ -409,8 +416,8 @@ static evmc_result execute(evmc_instance* instance, evmc_context* context, evmc_
 		jit.checkMemorySize();
 
 	if (!jit.host)
-		jit.host = context->fn_table;
-	assert(jit.host == context->fn_table);  // Require the fn_table not to change.
+		jit.host = context->host;
+	assert(jit.host == context->host);  // Require the host_interface not to change.
 
 	// TODO: Temporary keep track of the current message.
 	evmc_message const* prevMsg = jit.currentMsg;
@@ -438,7 +445,7 @@ static evmc_result execute(evmc_instance* instance, evmc_context* context, evmc_
 	result.output_size = 0;
 	result.release = nullptr;
 
-    auto codeIdentifier = makeCodeId(msg->code_hash, rev, msg->flags);
+    auto codeIdentifier = makeCodeId(context->host->get_code_hash(context, &msg->destination), rev, msg->flags);
     auto codeEntry = jit.getExecFunc(codeIdentifier);
     auto func = codeEntry.func;
     if (!func)
@@ -495,12 +502,12 @@ static evmc_result execute(evmc_instance* instance, evmc_context* context, evmc_
 	{
 		// Use result's reserved data to store the memory pointer.
 
-		evmc_get_optional_data(&result)->pointer = ctx.m_memData;
+		evmc_get_optional_storage(&result)->pointer = ctx.m_memData;
 
 		// Set pointer to the destructor that will release the memory.
 		result.release = [](evmc_result const* r)
 		{
-			std::free(evmc_get_const_optional_data(r)->pointer);
+			std::free(evmc_get_const_optional_storage(r)->pointer);
 		};
 		ctx.m_memData = nullptr;
 	}
@@ -509,7 +516,7 @@ static evmc_result execute(evmc_instance* instance, evmc_context* context, evmc_
 	return result;
 }
 
-static int setOption(evmc_instance* instance, const char* name, const char* value) noexcept
+static evmc_set_option_result setOption(evmc_instance* instance, const char* name, const char* value) noexcept
 {
     try
     {
@@ -517,13 +524,13 @@ static int setOption(evmc_instance* instance, const char* name, const char* valu
         {
             auto& jit = static_cast<JITImpl&>(*instance);
             jit.hitThreshold = std::stoul(value);
-            return 1;
+            return EVMC_SET_OPTION_INVALID_NAME;
         }
-        return 0;
+        return EVMC_SET_OPTION_SUCCESS;
     }
     catch (...)
     {
-        return 0;
+        return EVMC_SET_OPTION_SUCCESS;
     }
 }
 
@@ -559,15 +566,22 @@ void JITImpl::createEngine()
 	//	Cache::preload(*m_engine, funcCache);
 }
 
+evmc_instance createInstance() {
+  evmc_instance init = {
+    .abi_version = EVMC_ABI_VERSION,
+    .name = "evmjit",
+    .version = EVMJIT_VERSION,
+    .destroy = evmjit::destroy,
+    .execute = evmjit::execute,
+    .get_capabilities = evmjit::getCapabilities,
+    .set_tracer = nullptr,
+    .set_option = evmjit::setOption,
+  };
+  return init;
+}
+
 JITImpl::JITImpl()
-  : evmc_instance({
-        EVMC_ABI_VERSION,
-        "evmjit",
-        EVMJIT_VERSION,
-        evmjit::destroy,
-        evmjit::execute,
-        evmjit::setOption,
-    })
+  : evmc_instance(createInstance())
 {
 	parseOptions();
 
