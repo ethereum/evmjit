@@ -2,7 +2,7 @@
 
 namespace llvm
 {
-	class Module;
+class Module;
 }
 
 namespace dev
@@ -11,11 +11,10 @@ namespace eth
 {
 namespace jit
 {
-
 bool optimize(llvm::Module& _module);
 
 bool prepare(llvm::Module& _module);
 
-}
-}
-}
+}  // namespace jit
+}  // namespace eth
+}  // namespace dev

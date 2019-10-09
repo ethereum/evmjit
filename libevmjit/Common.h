@@ -6,11 +6,10 @@ namespace dev
 {
 namespace evmjit
 {
-
 using byte = uint8_t;
 using code_iterator = byte const*;
 
 #define UNTESTED assert(false)
 
-}
-}
+}  // namespace evmjit
+}  // namespace dev
