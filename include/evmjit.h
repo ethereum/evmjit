@@ -10,7 +10,7 @@
 #endif
 
 #else
-#define EXPORT __attribute__ ((visibility ("default")))
+#define EXPORT __attribute__((visibility("default")))
 #endif
 
 #if __cplusplus

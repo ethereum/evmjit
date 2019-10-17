@@ -1,8 +1,8 @@
 #pragma once
 
-#include <evmc/evmc.h>
 #include "CompilerHelper.h"
 #include "Instruction.h"
+#include <evmc/evmc.h>
 
 namespace dev
 {
@@ -13,58 +13,58 @@ namespace jit
 class RuntimeManager;
 using namespace evmjit;
 
-class GasMeter : public CompilerHelper // TODO: Use RuntimeHelper
+class GasMeter : public CompilerHelper  // TODO: Use RuntimeHelper
 {
 public:
-	GasMeter(IRBuilder& _builder, RuntimeManager& _runtimeManager, evmc_revision rev);
+    GasMeter(IRBuilder& _builder, RuntimeManager& _runtimeManager, evmc_revision rev);
 
-	/// Count step cost of instruction
-	void count(Instruction _inst);
+    /// Count step cost of instruction
+    void count(Instruction _inst);
 
-	/// Count additional cost
-	void count(llvm::Value* _cost, llvm::Value* _jmpBuf = nullptr, llvm::Value* _gasPtr = nullptr);
+    /// Count additional cost
+    void count(llvm::Value* _cost, llvm::Value* _jmpBuf = nullptr, llvm::Value* _gasPtr = nullptr);
 
-	/// Calculate & count gas cost for SSTORE instruction
-	void countSStore(class Ext& _ext, llvm::Value* _index, llvm::Value* _newValue);
+    /// Calculate & count gas cost for SSTORE instruction
+    void countSStore(class Ext& _ext, llvm::Value* _index, llvm::Value* _newValue);
 
-	/// Calculate & count additional gas cost for EXP instruction
-	void countExp(llvm::Value* _exponent);
+    /// Calculate & count additional gas cost for EXP instruction
+    void countExp(llvm::Value* _exponent);
 
-	/// Count gas cost of LOG data
-	void countLogData(llvm::Value* _dataLength);
+    /// Count gas cost of LOG data
+    void countLogData(llvm::Value* _dataLength);
 
-	/// Count gas cost of SHA3 data
-	void countSha3Data(llvm::Value* _dataLength);
+    /// Count gas cost of SHA3 data
+    void countSha3Data(llvm::Value* _dataLength);
 
-	/// Finalize cost-block by checking gas needed for the block before the block
-	void commitCostBlock();
+    /// Finalize cost-block by checking gas needed for the block before the block
+    void commitCostBlock();
 
-	/// Give back an amount of gas not used by a call
-	void giveBack(llvm::Value* _gas);
+    /// Give back an amount of gas not used by a call
+    void giveBack(llvm::Value* _gas);
 
-	/// Generate code that checks the cost of additional memory used by program
-	void countMemory(llvm::Value* _additionalMemoryInWords, llvm::Value* _jmpBuf, llvm::Value* _gasPtr);
+    /// Generate code that checks the cost of additional memory used by program
+    void countMemory(
+        llvm::Value* _additionalMemoryInWords, llvm::Value* _jmpBuf, llvm::Value* _gasPtr);
 
-	/// Count addional gas cost for memory copy
-	void countCopy(llvm::Value* _copyWords);
+    /// Count addional gas cost for memory copy
+    void countCopy(llvm::Value* _copyWords);
 
 private:
-	int64_t getStepCost(Instruction inst) const;
+    int64_t getStepCost(Instruction inst) const;
 
-	/// Cumulative gas cost of a block of instructions
-	/// @TODO Handle overflow
-	int64_t m_blockCost = 0;
+    /// Cumulative gas cost of a block of instructions
+    /// @TODO Handle overflow
+    int64_t m_blockCost = 0;
 
-	llvm::CallInst* m_checkCall = nullptr;
-	llvm::Function* m_gasCheckFunc = nullptr;
+    llvm::CallInst* m_checkCall = nullptr;
+    llvm::Function* m_gasCheckFunc = nullptr;
 
-	RuntimeManager& m_runtimeManager;
+    RuntimeManager& m_runtimeManager;
 
-	/// EVM revision.
-	evmc_revision m_rev;
+    /// EVM revision.
+    evmc_revision m_rev;
 };
 
-}
-}
-}
-
+}  // namespace jit
+}  // namespace eth
+}  // namespace dev

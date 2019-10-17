@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.4.0)
+cmake_minimum_required(VERSION 3.5)
 
 cmake_policy(SET CMP0042 OLD)	# Fix MACOSX_RPATH.
 cmake_policy(SET CMP0048 NEW)	# Allow VERSION argument in project().
@@ -6,9 +6,13 @@ if (POLICY CMP0054)
 	cmake_policy(SET CMP0054 NEW)	# No longer implicitly dereference variables.
 endif()
 
-set(CMAKE_CONFIGURATION_TYPES Debug Release RelWithDebInfo)
+include(cmake/cable/bootstrap.cmake)
+include(CableBuildType)
+
+cable_set_build_type(DEFAULT RelWithDebInfo CONFIGURATION_TYPES Debug Release RelWithDebInfo)
 
 project(EVMJIT VERSION 0.9.0.2 LANGUAGES CXX C)
+
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
